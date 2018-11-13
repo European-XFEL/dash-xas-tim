@@ -12,12 +12,12 @@ class XasProcessor(abc.ABC):
         self._spectrum = None
 
     @abc.abstractmethod
-    def process_run(self, run_folder, energy=None):
+    def process_run(self, run_folder, photon_energy=None):
         """Process data in a run folder.
         
         :param str run_folder: folder that contains run data. 
-        :param float energy: photon energy for this run. If None, it 
-            checks if the data contains train-resolved photon energy 
+        :param float photon_energy: photon energy for this run. If None, 
+            it checks if the data contains train-resolved photon energy 
             information, e.g. from monochromator.
         """
         pass
@@ -55,6 +55,11 @@ class XasFastADC(XasProcessor):
         self._xgm = None
         self._mcps = None
 
+        self._photon_energies = []
+        self._absorptions = []
+        for _ in adc_channels:
+            self._absorptions.append([])
+
     @staticmethod
     def _integrate_adc_channel(run, ch, threshold=-200):
         """Integration along a FastAdc channel.
@@ -70,7 +75,7 @@ class XasFastADC(XasProcessor):
   
         return np.trapz(raw_data.where(raw_data < threshold, 0), axis=1)
 
-    def process_run(self, run_folder, energy=None):
+    def process_run(self, run_folder, photon_energy=None):
         run = RunDirectory(run_folder)
         self._run_folder = run_folder
 
@@ -85,9 +90,15 @@ class XasFastADC(XasProcessor):
         self._xgm = xgm
         self._mcps = mcps
 
-        if energy is not None:
-            # TODO: add a spectrum point
+        if photon_energy is not None:
+            self._photon_energies.append(photon_energy)
+
+            xgm_mean = self._xgm.mean().item()
+            for absorption, mcp in zip(self._absorptions, self._mcps):
+                absorption.append(-np.log(np.abs(mcp.mean() / xgm_mean)))
+        else:
             pass
+            # TODO: search mono information
 
     def plot_correlation(self):
         if self._xgm is None or self._mcps is None or self._run_folder is None:
@@ -95,19 +106,38 @@ class XasFastADC(XasProcessor):
 
         import matplotlib.pyplot as plt
 
-        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        fig, axes = plt.subplots(2, 2, figsize=(12, 9))
 
         for i, ax in enumerate(np.ravel(axes)):
             ax.plot(self._xgm, self._mcps[i], '.', alpha=0.2)
             ax.set_xlabel("XGM pulse energy ($\mu$J)")
-            ax.set_ylabel("{} integration (arb.)".format(list(self._adc_channels.keys())[i]))
+            ax.set_ylabel("MCP integration (arb.)")
+            ax.set_title(list(self._adc_channels.keys())[i])
 
         fig.suptitle(self._run_folder, fontsize=16)
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-    def plot_spectrum(self):
+    def plot_spectrum(self, only=None, exclude=None):
         import matplotlib.pyplot as plt
+
+        if exclude is None:
+            exclude = []
+
+        if only is None:
+            only = list(self._adc_channels.keys())
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        for absorption, label in zip(self._absorptions, only):
+            if label in exclude:
+                continue
+            ax.plot(self._photon_energies, absorption, 'o', ms=10, label=label)
+
+        ax.set_xlabel("Photon energy (eV)")
+        ax.set_ylabel("Absorption")
+        ax.legend()
+
+        plt.tight_layout()
 
     def _check_adc_channels(self, run):
         """Check the selected FastAdc channels all contain data."""

@@ -20,25 +20,25 @@ class AbsorptionSpectrum:
     """Absorption spectrum."""
     def __init__(self):
         """Initialization."""
-        self.photon_energies = [] 
-        self.absorptions = [] 
-        self.absorption_sigmas = [] 
-        self.weights = [] 
+        self._photon_energies = [] 
+        self._absorptions = [] 
+        self._absorption_sigmas = [] 
+        self._weights = [] 
 
-    def add_data(self, photon_energy, absorption, sigma=0.0, weight=np.inf):
+    def add_point(self, photon_energy, absorption, sigma=0.0, weight=np.inf):
         """Add a data point."""
-        self.photon_energies.append(photon_energy)
-        self.absorptions.append(absorption)
-        self.absorption_sigmas.append(sigma)
-        self.weights.append(weight)
+        self._photon_energies.append(photon_energy)
+        self._absorptions.append(absorption)
+        self._absorption_sigmas.append(sigma)
+        self._weights.append(weight)
 
     def to_dataframe(self):
         """Return a pandas.DataFrame representation of the spectrum."""
         df = pd.DataFrame({
-            "photon_energy": self.photon_energies, 
-            "absorption": self.absorptions, 
-            "absorption_sigma": self.absorption_sigmas, 
-            "weight": self.weights 
+            "photon_energy": self._photon_energies, 
+            "absorption": self._absorptions, 
+            "absorption_sigma": self._absorption_sigmas, 
+            "weight": self._weights 
             })
         return df
 
@@ -61,21 +61,21 @@ class XasProcessor(abc.ABC):
 
     @abc.abstractmethod
     def correlation(self, name):
-        """Return the I0 and I1.
+        """Get a pandas.DataFram for correlation analysis.
 
-        :param str name: name of the spectrum
+        :param str name: name of I1. For example, the name of a MCP channel.
 
-        :return pandas.DataFrame: spectrum 
+        :return pandas.DataFrame: DataFrame with columns I0 and I1.  
         """
         pass
 
     @abc.abstractmethod
     def spectrum(self, name):
-        """Get spectrum by name.
+        """Get a pandas.DataFrame for spectrum analysis..
         
-        :param str name: name of the spectrum
+        :param str name: name of I1. For example, the name of a MCP channel. 
 
-        :return pandas.DataFrame: spectrum 
+        :return pandas.DataFrame: DataFrame with spectrum data in columns. 
         """
         pass
 
@@ -94,6 +94,7 @@ class XasFastADC(XasProcessor):
         :param dict adc_channels: names of FastAdc channels which received data.
         """
         super().__init__()
+
         self._xgm_id = xgm_id
         self._adc_id = adc_id
         self._adc_channels = adc_channels
@@ -106,13 +107,13 @@ class XasFastADC(XasProcessor):
 
     @staticmethod
     def _integrate_adc_channel(run, ch, threshold=-200):
-        """Integration along a FastAdc channel.
+        """Integration of a FastAdc channel for all trains in a run.
           
         :param DataCollection run: run data. 
-        :param str ch: output channel name.
+        :param str ch: full name of the output channel.
         :param int threshold: data above this threshold will be ignored.
                       
-        :return
+        :return numpy.ndarray: 1D array holding integration result for each train. 
         """
         background = run.get_array(ch, 'data.baseline')
         raw_data = run.get_array(ch, 'data.rawData') - background
@@ -121,7 +122,6 @@ class XasFastADC(XasProcessor):
 
     def process_run(self, run_folder, photon_energy=None):
         run = RunDirectory(run_folder)
-        self._run_folder = run_folder
 
         self._check_adc_channels(run)
 
@@ -136,7 +136,8 @@ class XasFastADC(XasProcessor):
             weight = self._xgm.sum().item()
             for name in self._spectrums.keys():
                 i_1 = np.abs(self._mcps[name].mean())
-                self._spectrums[name].add_data(photon_energy, -np.log(i_1 / i_0), 0.0, weight)
+                # TODO: can i_0 be 0?
+                self._spectrums[name].add_point(photon_energy, -np.log(i_1 / i_0), 0.0, weight)
         else:
             pass
             # TODO: search mono information

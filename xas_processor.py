@@ -1,5 +1,13 @@
-import re
+"""
+Offline data analysis and visualization tool for Xray Absorption Spectroscopy
+(XAS) experiments at SCS, European XFEL.
+
+Author: Jun Zhu <jun.zhu@xfel.eu>
+Copyright (C) European X-Ray Free-Electron Laser Facility GmbH.
+All rights reserved.
+"""
 import abc
+import re
 from collections import OrderedDict
 
 import numpy as np

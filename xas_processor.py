@@ -25,7 +25,7 @@ class AbsorptionSpectrum:
         self.weights.append(weight)
 
     def to_dataframe(self):
-        """Return a pandas.Dataframe representation of the spectrum."""
+        """Return a pandas.DataFrame representation of the spectrum."""
         df = pd.DataFrame({
             "photon_energy": self.photon_energies, 
             "absorption": self.absorptions, 
@@ -52,8 +52,13 @@ class XasProcessor(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def plot_correlation(self):
-        """Plot the correlation between I0 and I1."""
+    def correlation(self, name):
+        """Return the I0 and I1.
+
+        :param str name: name of the spectrum
+
+        :return pandas.DataFrame: spectrum 
+        """
         pass
 
     @abc.abstractmethod
@@ -62,7 +67,7 @@ class XasProcessor(abc.ABC):
         
         :param str name: name of the spectrum
 
-        :return pandas.Dataframe: spectrum 
+        :return pandas.DataFrame: spectrum 
         """
         pass
 
@@ -85,12 +90,11 @@ class XasFastADC(XasProcessor):
         self._adc_id = adc_id
         self._adc_channels = adc_channels
         
-        self._run_folder = None
-        self._xgm = None
-        self._mcps = None
-
+        self._xgm = None 
+        self._mcps = OrderedDict()
         for ch in adc_channels:
             self._spectrums[ch] = AbsorptionSpectrum()
+            self._mcps[ch] = None 
 
     @staticmethod
     def _integrate_adc_channel(run, ch, threshold=-200):
@@ -113,43 +117,27 @@ class XasFastADC(XasProcessor):
 
         self._check_adc_channels(run)
 
-        xgm = run.get_array(self._xgm_id + ":output", 'data.intensityTD').max(axis=1)
+        self._xgm = run.get_array(self._xgm_id + ":output", 'data.intensityTD').max(axis=1)
                                                                             
-        mcps = []
-        for ch in self._adc_channels.values():
-            mcps.append(self._integrate_adc_channel(run, ch))
-        
-        self._xgm = xgm
-        self._mcps = mcps
+        for name, ch in self._adc_channels.items():
+            self._mcps[name] = self._integrate_adc_channel(run, ch)
 
         if photon_energy is not None:
             # TODO: I don't like the different interface between np.array and xarray
             i_0 = self._xgm.mean().item()
             weight = self._xgm.sum().item()
-            for spectrum, mcp in zip(self._spectrums.values(), self._mcps):
-                i_1 = np.abs(mcp.mean())
-                spectrum.add_data(photon_energy, -np.log(i_1 / i_0), 0.0, weight)
+            for name in self._spectrums.keys():
+                i_1 = np.abs(self._mcps[name].mean())
+                self._spectrums[name].add_data(photon_energy, -np.log(i_1 / i_0), 0.0, weight)
         else:
             pass
             # TODO: search mono information
 
-    def plot_correlation(self):
-        if self._xgm is None or self._mcps is None or self._run_folder is None:
-            return
-
-        import matplotlib.pyplot as plt
-
-        fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-
-        for i, ax in enumerate(np.ravel(axes)):
-            ax.plot(self._xgm, self._mcps[i], '.', alpha=0.2)
-            ax.set_xlabel("XGM pulse energy ($\mu$J)")
-            ax.set_ylabel("MCP integration (arb.)")
-            ax.set_title(list(self._adc_channels.keys())[i])
-
-        fig.suptitle(self._run_folder, fontsize=16)
-
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    def correlation(self, name):
+        return pd.DataFrame({
+            "XGM": self._xgm,
+            "MCP": self._mcps[name]
+        })
 
     def spectrum(self, name):
         return self._spectrums[name].to_dataframe()

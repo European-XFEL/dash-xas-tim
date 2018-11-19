@@ -59,6 +59,7 @@ class AbsorptionSpectrum:
             "absorption_sigma": self._absorption_sigmas, 
             "weight": self._weights 
             })
+
         return df
 
 
@@ -76,7 +77,7 @@ class XasProcessor(abc.ABC):
         """Initialization.
         
         :param str run_folder: full path of the run folder.
-        :param int pulse_id_min: start of the pulse id.
+        :param int pulse_id_min: start of the pulse ID.
         :param int n_pulses: number of pulses in a train.
         """
         self._run = RunDirectory(run_folder)
@@ -125,7 +126,7 @@ class XasProcessor(abc.ABC):
             if src not in sources:
                 raise ValueError("Source not found: {}!".format(src))
 
-    def plot_xgm_run(self, *, figsize=(8, 7.2)):
+    def plot_xgm_run(self, *, figsize=(8, 5.6)):
         """Plot the train resolved data from XGM.
 
         :param tuple figsize: figure size.
@@ -189,18 +190,19 @@ class XasProcessor(abc.ABC):
         return fig, (ax1, ax2)
 
     @abc.abstractmethod
-    def process(self):
-        """Process data."""
+    def process(self, config):
+        """Process the run data.
+        
+        :param dict config: configuration for integrating of digitizer signal.
+        """
         pass
 
 
     @abc.abstractmethod
-    def correlation(self, name):
-        """Get a pandas.DataFram for correlation analysis.
+    def correlation(self):
+        """Get the correlation data in pandas.DataFrame.
 
-        :param str name: name of I1. For example, the name of a MCP channel.
-
-        :return pandas.DataFrame: DataFrame with columns I0 and I1.  
+        :return pandas.DataFrame: DataFrame with columns I0 and all I1(s).  
         """
         pass
 
@@ -224,12 +226,8 @@ class XasFastADC(XasProcessor):
 
 
 class XasDigitizer(XasProcessor):
-    """Xray absorption spectroscopy analyser."""
-    def __init__(self, *args,   
-                 channels=('D', 'B', 'C', 'A'), 
-                 pulse_separation=880e-9,
-                 interleaved_mode=False, 
-                 **kwargs):
+    def __init__(self, *args, channels=('D', 'B', 'C', 'A'), 
+                 pulse_separation=880e-9, interleaved_mode=False, **kwargs):
         """Initialization.
         
         :param tuple channels: names of AdqDigitizer channels which 
@@ -348,10 +346,7 @@ class XasDigitizer(XasProcessor):
 
 
     def process(self, config=None):
-        """Process the run data.
-        
-        :param dict config: configuration for integrating of digitizer signal.
-        """
+        """Override."""
         self._I0 = self._run.get_array(
             self.sources['xgm_output'], 'data.intensityTD').values[...,
                 self._pulse_id_min: self._pulse_id_min + self._n_pulses].flatten()
@@ -361,7 +356,7 @@ class XasDigitizer(XasProcessor):
             print("{} processed".format(name.upper()))
 
     def correlation(self):
-        """Get the correlation data in pandas.DataFrame."""
+        """Override."""
         data = {"XGM": self._I0}
         data.update({ch.upper(): self._I1[ch] for ch in self._channels})
             

@@ -307,7 +307,7 @@ class XasDigitizer(XasProcessor):
 
     def _integrate_channel(self, channel_id, config):
         """Integration of a FastAdc channel for all trains in a run.
-          
+ 
         :param str channel_id: full name of the output channel.
         :param dict config: configuration for integrating of digitizer signal.
             If None, use automatic peak finding. If not, the following keys
@@ -362,7 +362,7 @@ class XasDigitizer(XasProcessor):
             
         return pd.DataFrame(data)
 
-    def plot_correlation(self, channel="all", *, figsize=(6, 4.5),
+    def plot_correlation(self, channel="all", *, figsize=(8, 6),
                          marker_size=6, alpha=0.05, n_bins=20):
         """Generate correlation plots.
         
@@ -375,25 +375,46 @@ class XasDigitizer(XasProcessor):
         :param int n_bins: number of bins for the histogram plots.
         """
         import matplotlib.pyplot as plt
+        from sklearn.linear_model import LinearRegression
 
         fig, axes = plt.subplots(2, 2, figsize=figsize)
         channel = channel.lower()
         if channel == "all":
-            for ax, ch in zip(axes.flatten(), self._channels):
-                ax.scatter(self._I0, self._I1[ch], s=marker_size, alpha=alpha)
-                ax.set_title(ch.upper())
+            for ax, channel in zip(axes.flatten(), self._channels):
+                ax.scatter(self._I0, self._I1[channel], s=marker_size, alpha=alpha)
+                reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[channel])
+                ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
+                                c='#FF8000', lw=2)
+                ax.set_xlabel("$I_0$")
+                ax.set_ylabel("$I_1$")
+                ax.set_title(channel.upper())
+
+            fig.tight_layout()
         elif channel in self._channels:
             axes[1][0].scatter(self._I0, self._I1[channel], s=marker_size, alpha=alpha)
+            reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[channel])
+            axes[1][0].plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
+                            c='#FF8000', lw=2)
+            axes[1][0].set_xlabel("$I_0$")
+            axes[1][0].set_ylabel("$I_1$")
+
             axes[0][0].hist(self._I0, bins=n_bins)
-            # TODO: use the absorption in Spectrum
-            axes[0][1].scatter(self._I0, -np.log(self._I1[channel]/self._I0), 
-                               s=marker_size, alpha=alpha)
+            axes[0][0].axvline(self._I0.mean(), c='#6A0888', ls='--')
+
             axes[1][1].hist(self._I1[channel], bins=n_bins, orientation='horizontal')
+            axes[1][1].axhline(self._I1[channel].mean(), c='#6A0888', ls='--')
+
+            # TODO: use the absorption in Spectrum
+            axes[0][1].scatter(self._I0, -np.log(np.abs(self._I1[channel]/self._I0)), 
+                               s=marker_size, alpha=alpha)
+            axes[0][1].set_xlabel("$I_0$")
+            axes[0][1].set_ylabel("$-log(I_1/I_0)$")
+            
+            fig.suptitle(channel.upper())
+            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
         else:
             raise ValueError("Not understandable input!")
-
-        fig.tight_layout()
-
+        
         return fig, axes
 
     def spectrum(self, channel):

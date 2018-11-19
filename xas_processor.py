@@ -159,7 +159,12 @@ class XasProcessor(abc.ABC):
         return fig, (ax1, ax1_tw, ax2)
 
     def plot_xgm_train(self, *, index=0, train_id=None, figsize=(8, 5.6)):
-        """Plot xgm measurement in a given train."""
+        """Plot xgm measurement in a given train.
+        
+        :param int index: train index. Ignored if train_id is given.
+        :param int train_id: train ID.
+        :param tuple figsize: figure size.
+        """
         import matplotlib.pyplot as plt
 
         if train_id is None:
@@ -258,7 +263,14 @@ class XasDigitizer(XasProcessor):
 
     def plot_digitizer_train(self, *, index=0, train_id=None, figsize=(8, 11.2),
                              x_min=None, x_max=None):
-        """Plot digitizer signals in a given train."""
+        """Plot digitizer signals in a given train.
+
+        :param int index: train index. Ignored if train_id is given.
+        :param int train_id: train ID.
+        :param tuple figsize: figure size.
+        :param int x_min: minimum sample ID.
+        :param int x_max: maximum sample ID.
+        """
         if train_id is None:
             tid, data = self._run.train_from_index(index)
         else:
@@ -295,10 +307,10 @@ class XasDigitizer(XasProcessor):
 
         return fig, axes
 
-    def _integrate_channel(self, ch, config):
+    def _integrate_channel(self, channel_id, config):
         """Integration of a FastAdc channel for all trains in a run.
           
-        :param str ch: full name of the output channel.
+        :param str channel_id: full name of the output channel.
         :param dict config: configuration for integrating of digitizer signal.
             If None, use automatic peak finding. If not, the following keys
             are mandantory:
@@ -313,9 +325,7 @@ class XasDigitizer(XasProcessor):
 
         :return numpy.ndarray: 1D array holding integration result for each train. 
         """
-        # def integrate_mcp_channel(trace,  
-
-        trace  = self._run.get_array(self.sources['digitizer_output'], ch)
+        trace  = self._run.get_array(self.sources['digitizer_output'], channel_id)
 
         if config is None:
             cfg = {"auto": True}
@@ -350,19 +360,21 @@ class XasDigitizer(XasProcessor):
             self._I1[name] = self._integrate_channel(ch, config)
             print("{} processed".format(name.upper()))
 
-    def correlation(self, channel):
-        return pd.DataFrame({
-            "XGM": self._I0,
-            "MCP": self._I1[channel.lower()]
-        })
+    def correlation(self):
+        """Get the correlation data in pandas.DataFrame."""
+        data = {"XGM": self._I0}
+        data.update({ch.upper(): self._I1[ch] for ch in self._channels})
+            
+        return pd.DataFrame(data)
 
-    def plot_correlation(self, channel="all", *, 
+    def plot_correlation(self, channel="all", *, figsize=(8, 6),
                          marker_size=6, alpha=0.05, n_bins=20):
         """Generate correlation plots.
         
         :param str channel: MCP channel name, e.g. mcp1, for visualizing
             a single channel with four plots, or 'all' for visualizing all 
             the channels with one plot each. Case insensitive.
+        :param tuple figsize: figure size.
         :param int marker_size: marker size for the scatter plots.
         :param float alpha: transparency for the scatter plots.
         :param int n_bins: number of bins for the histogram plots.
@@ -389,8 +401,8 @@ class XasDigitizer(XasProcessor):
 
         return fig, axes
 
-    def spectrum(self, name):
-        return self._spectrums[name].to_dataframe()
+    def spectrum(self, channel):
+        return self._spectrums[chanel.lower()].to_dataframe()
 
     def _check_adc_channels(self, run):
         """Check the selected FastAdc channels all contain data."""

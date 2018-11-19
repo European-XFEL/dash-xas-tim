@@ -367,7 +367,7 @@ class XasDigitizer(XasProcessor):
             
         return pd.DataFrame(data)
 
-    def plot_correlation(self, channel="all", *, figsize=(8, 6),
+    def plot_correlation(self, channel="all", *, figsize=(6, 4.5),
                          marker_size=6, alpha=0.05, n_bins=20):
         """Generate correlation plots.
         
@@ -381,7 +381,7 @@ class XasDigitizer(XasProcessor):
         """
         import matplotlib.pyplot as plt
 
-        fig, axes = plt.subplots(2, 2, figsize=(8, 6))
+        fig, axes = plt.subplots(2, 2, figsize=figsize)
         channel = channel.lower()
         if channel == "all":
             for ax, ch in zip(axes.flatten(), self._channels):

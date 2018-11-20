@@ -115,12 +115,13 @@ class XasProcessor(abc.ABC):
             fields=[(self.sources['sa3_xgm'], '*value')])
         self._sa3_xgm_df.rename(columns=lambda x: x.split('/')[-1],
                                 inplace=True)
-
-        # get the DataFrame for Softmono control data
+        
+        # get the DataFrame for SoftMono control data
         self._mono_df = self._run.get_dataframe(
             fields=[(self.sources['mono'], '*value')])
         self._mono_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
 
+        self._photon_energies = None  # photon energies for each pulse
         self._I0 = None 
         self._I1 = OrderedDict()
 
@@ -149,7 +150,6 @@ class XasProcessor(abc.ABC):
         train_count = len(self._run.train_ids)
         span_sec = (last_train - first_train) / 10
         span_txt = str(datetime.timedelta(seconds=span_sec))
-
         photon_energies = self._mono_df['actualEnergy']
 
         print('# of trains:          ', train_count)
@@ -158,8 +158,8 @@ class XasProcessor(abc.ABC):
         print('Last train ID:        ', last_train)
         print('# of pulses per train:', self._n_pulses)
         print('First pulse ID:       ', self._pulse_id_min)
-        print('Min photon energy:    ', round(min(photon_energies), 4), 'eV')
-        print('Max photon energy:    ', round(max(photon_energies), 4), 'eV')
+        print('Min photon energy:    ', round(photon_energies.min(), 4), 'eV')
+        print('Max photon energy:    ', round(photon_energies.max(), 4), 'eV')
 
         print('MCP channels:')
         for channel, channel_id in self._channels.items():
@@ -246,20 +246,27 @@ class XasProcessor(abc.ABC):
         """
         pass
 
-    @property
-    def correlation(self):
-        """Get the correlation data in pandas.DataFrame.
+    @abc.abstractmethod
+    def get_dataframe(self):
+        """Get the pulse-resolved data in pandas.DataFrame.
 
-        :return pandas.DataFrame: DataFrame with columns I0 and all I1(s).  
+        :return pandas.DataFrame: pulse resolved data in pandas.DataFrame.
         """
-        data = {"XGM": self._I0}
-        data.update({ch.upper(): self._I1[ch] for ch in self._channels})
-            
-        return pd.DataFrame(data)
+        pass            
 
     @property
     def absorption(self):
         return self._absorption
+
+    @abc.abstractmethod
+    def compute_spectrum(self, n_bins=20):
+        """Calculate spectrum.
+        
+        :param int n_bins: number of energy bins.
+
+        :return: spectrum data in pandas.DataFrame.
+        """
+        pass
 
 
 class XasFastCCD(XasProcessor):
@@ -400,12 +407,35 @@ class XasDigitizer(XasProcessor):
         print("Removed {}/{} data with I0 <= 0 or I1 >= 0 (MCP1-3)".format(
             len(self._I0) - sum(condition), len(self._I0)))
 
+        # apply condition to all the useful pulse resolved data here
         self._I0 = self._I0[condition]
+        self._photon_energies = np.repeat(self._mono_df['actualEnergy'], 
+                                          self._n_pulses)[condition]
+
         for channel in self._channels:
             # Note: the sign of I1 is reversed here!!!
             self._I1[channel] = -self._I1[channel][condition]
             self._absorption.loc[channel] = compute_absorption(
                 self._I0, self._I1[channel])
+
+    def get_dataframe(self):
+        """Override."""
+        data = {'energy': self._photon_energies, "XGM": self._I0}
+        data.update({ch.upper(): self._I1[ch] for ch in self._channels})
+            
+        return pd.DataFrame(data)
+
+    def compute_spectrum(self, n_bins=20):
+        """Override."""
+        data = self.get_dataframe()
+
+        spectrum = data.groupby(pd.cut(data['energy'], bins=n_bins)).mean()
+        for i, channel in enumerate(self._channels):
+            spectrum['muA{}'.format(i)] = \
+                (spectrum[channel.upper()] / spectrum['XGM']).apply(
+                    lambda x: -np.log(x))
+
+        return spectrum
 
     def plot_correlation(self, channel="all", *, figsize=(8, 6),
                          marker_size=6, alpha=0.05, n_bins=20):
@@ -479,3 +509,8 @@ class XasDigitizer(XasProcessor):
             raise ValueError("Not understandable input!")
         
         return fig, axes
+
+    def plot_spectrum(self, n_bins=20, channel="all", *, figsize=(8, 6)):
+        """Generate spectrum plots."""
+        spectrum = self.compute_spectrum(nbins=nbins)
+

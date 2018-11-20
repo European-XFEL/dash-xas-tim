@@ -66,6 +66,8 @@ def compute_absorption(I0, I1):
 
     p = np.corrcoef(I1, I0)[0, 1]
 
+    # we need the 'abs' for the background channel which has both positive
+    # and negative data
     absorption_mean = -np.log(abs(I1_mean)/I0_mean)
 
     c1 = (I1_std / I1_mean) ** 2 + (I0_std / I0_mean) ** 2
@@ -395,10 +397,10 @@ class XasDigitizer(XasProcessor):
 
         self._I0 = self._I0[condition]
         for channel in self._channels:
-            self._I1[channel] = self._I1[channel][condition]
+            # Note: the sign of I1 is reversed here!!!
+            self._I1[channel] = -self._I1[channel][condition]
             self._absorption.loc[channel] = compute_absorption(
                 self._I0, self._I1[channel])
-            print("{} processed".format(channel.upper()))
 
     def plot_correlation(self, channel="all", *, figsize=(8, 6),
                          marker_size=6, alpha=0.05, n_bins=20):
@@ -444,20 +446,19 @@ class XasDigitizer(XasProcessor):
             axes[1][0].legend()
 
             axes[0][0].hist(self._I0, bins=n_bins)
-            axes[0][0].axvline(self._I0.mean(), c='#6A0888', ls='--')
+            axes[0][0].axvline(absorption['muIo'], c='#6A0888', ls='--')
 
             axes[1][1].hist(self._I1[channel], bins=n_bins, orientation='horizontal')
-            axes[1][1].axhline(self._I1[channel].mean(), c='#6A0888', ls='--')
+            axes[1][1].axhline(absorption['muT'], c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
-                absp = -np.log(np.abs(self._I1[channel] / self._I0)) 
+                absp = -np.log(abs(self._I1[channel]) / self._I0) 
             axes[0][1].scatter(self._I0, absp, s=marker_size, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")
             axes[0][1].axhline(
-                absorption['muA'], 
+                absorption['muA'], c='#FF8000', ls='--',
                 label="SNR@labs: {:.3g}".format(1./absorption['sigmaA']),
-                c='#FF8000', ls='--'
             )
             axes[0][1].legend()
             

@@ -19,7 +19,18 @@ from karabo_data import RunDirectory
 
 def find_peaks(trace, n_peaks, peak_start, peak_width, 
                background_end, background_width, peak_interval):
-    """Return a list of peaks."""
+    """Return a list of peaks.
+    
+    :param trace:
+    :param n_peaks:
+    :param peak_start:
+    :param peak_width:
+    :param background_end:
+    :param background_width:
+    :param peak_interval:
+
+    :returns:
+    """
     peaks = []
     backgrounds = []
     peak0 = peak_start
@@ -35,32 +46,17 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     return peaks, backgrounds 
 
 
-class AbsorptionSpectrum:
-    """Absorption spectrum."""
-    def __init__(self):
-        """Initialization."""
-        self._photon_energies = [] 
-        self._absorptions = [] 
-        self._absorption_sigmas = [] 
-        self._weights = [] 
+def compute_absorption(intensity_in, intensity_out):
+    """Compute absorption.
+    
+    :param numpy.ndarray intensity_in: incident beam intensity, 1D.
+    :param numpy.ndarray intensity_out: transmitted beam intensity, 1D.
 
-    def add_point(self, photon_energy, absorption, sigma=0.0, weight=np.inf):
-        """Add a data point."""
-        self._photon_energies.append(photon_energy)
-        self._absorptions.append(absorption)
-        self._absorption_sigmas.append(sigma)
-        self._weights.append(weight)
-
-    def to_dataframe(self):
-        """Return a pandas.DataFrame representation of the spectrum."""
-        df = pd.DataFrame({
-            "photon_energy": self._photon_energies, 
-            "absorption": self._absorptions, 
-            "absorption_sigma": self._absorption_sigmas, 
-            "weight": self._weights 
-            })
-
-        return df
+    :returns:
+    """    
+    with np.errstate(divide='ignore', invalid='ignore'):
+        absorption = -np.log(np.abs(intensity_out/intensity_in)) 
+    return absorption, np.zeros_like(absorption)
 
 
 class XasProcessor(abc.ABC):
@@ -255,9 +251,12 @@ class XasDigitizer(XasProcessor):
         
         self._I0 = None 
         self._I1 = OrderedDict()
+        self._absorption = OrderedDict()
+        self._absorption_sigma = OrderedDict()
         for ch in self._channels:
             self._I1[ch] = None 
-            self._spectrums[ch] = AbsorptionSpectrum()
+            self._absorption[ch] = None
+            self._absorption_sigma[ch] = None
 
     def plot_digitizer_train(self, *, index=0, train_id=None, figsize=(8, 11.2),
                              x_min=None, x_max=None):
@@ -344,16 +343,33 @@ class XasDigitizer(XasProcessor):
 
         return np.ravel(ret, order="F") 
 
-
     def process(self, config=None):
         """Override."""
+        # self._I0 is a numpy.ndarray
         self._I0 = self._run.get_array(
             self.sources['xgm_output'], 'data.intensityTD').values[...,
                 self._pulse_id_min: self._pulse_id_min + self._n_pulses].flatten()
-                                                                            
-        for name, ch in self._channels.items():
-            self._I1[name] = self._integrate_channel(ch, config)
-            print("{} processed".format(name.upper()))
+
+        for channel, channel_id in self._channels.items():
+            # self._I1 is a list of numpy.ndarray
+            self._I1[channel] = self._integrate_channel(channel_id, config)
+
+        # set condition for valid data: I0 > 0 and I1 < 0 
+        channels = list(self._channels.keys())
+        condition = self._I0 > 0
+        # only apply to MCP1, MCP2 and MCP3
+        for i in range(3):
+            condition &= self._I1[channels[i]] < 0
+
+        print("Removed {}/{} data with I0 <= 0 or I1 >= 0 (MCP1-3)".format(
+            len(self._I0) - sum(condition), len(self._I0)))
+
+        self._I0 = self._I0[condition]
+        for channel in self._channels:
+            self._I1[channel] = self._I1[channel][condition]
+            self._absorption[channel], self._absorption_sigma[channel] = \
+                    compute_absorption(self._I0, self._I1[channel])
+            print("{} processed".format(channel.upper()))
 
     def correlation(self):
         """Override."""
@@ -404,8 +420,7 @@ class XasDigitizer(XasProcessor):
             axes[1][1].hist(self._I1[channel], bins=n_bins, orientation='horizontal')
             axes[1][1].axhline(self._I1[channel].mean(), c='#6A0888', ls='--')
 
-            # TODO: use the absorption in Spectrum
-            axes[0][1].scatter(self._I0, -np.log(np.abs(self._I1[channel]/self._I0)), 
+            axes[0][1].scatter(self._I0, self._absorption[channel], 
                                s=marker_size, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")
@@ -418,7 +433,15 @@ class XasDigitizer(XasProcessor):
         return fig, axes
 
     def spectrum(self, channel):
-        return self._spectrums[chanel.lower()].to_dataframe()
+        """Return a pandas.DataFrame representation of the spectrum."""
+        df = pd.DataFrame({
+            "photon_energy": self._mono_df['actualEnergy'],
+            "absorption": self._absorptions, 
+            "absorption_sigma": self._absorption_sigmas, 
+            "weight": self._weights 
+            })
+
+        return df
 
     def _check_adc_channels(self, run):
         """Check the selected FastAdc channels all contain data."""

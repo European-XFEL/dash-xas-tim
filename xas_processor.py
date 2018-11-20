@@ -111,7 +111,25 @@ class XasProcessor(abc.ABC):
             fields=[(self.sources['mono'], '*value')])
         self._mono_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
 
-        self._spectrums = OrderedDict() 
+        self._I0 = None 
+        self._I1 = OrderedDict()
+
+        # the naming convention of the columns is in line with the code
+        # provided by Loic Le Guyader:
+        #
+        # - muA: absorption mean
+        # - sigmaA: absorption standard deviation
+        # - weights: sum of Io values
+        # - muT: transmission mean
+        # - sigmaT: transmission standard deviation
+        # - muIo: Io mean
+        # - sigmaIo: Io standard deviation
+        # - p: correlation coefficient between T and Io
+        # - counts: length of T
+        self._absorption = pd.DataFrame(
+            columns=['muA', 'sigmaA', 'weights', 'muT', 'sigmaT', 
+                     'muIo', 'sigmaIo', 'p', 'counts']
+        )
 
     def info(self):
         """Print out information of the run(s)."""
@@ -214,22 +232,20 @@ class XasProcessor(abc.ABC):
         """
         pass
 
-
-    @abc.abstractmethod
+    @property
     def correlation(self):
         """Get the correlation data in pandas.DataFrame.
 
         :return pandas.DataFrame: DataFrame with columns I0 and all I1(s).  
         """
-        pass
+        data = {"XGM": self._I0}
+        data.update({ch.upper(): self._I1[ch] for ch in self._channels})
+            
+        return pd.DataFrame(data)
 
-    @abc.abstractmethod
+    @property
     def absorption(self):
-        """Get the absorption data in pandas.DataFrame.
-        
-        :return pandas.DataFrame: DataFrame with absorption data in columns. 
-        """
-        pass
+        return self._absorption
 
 
 class XasFastCCD(XasProcessor):
@@ -268,27 +284,8 @@ class XasDigitizer(XasProcessor):
             self._resolution = 0.25e-9
         self._peak_interval = pulse_separation / self._resolution
         
-        self._I0 = None 
-        self._I1 = OrderedDict()
         for ch in self._channels:
             self._I1[ch] = None 
-
-        # the naming convention of the columns is in line with the code
-        # provided by Loic Le Guyader:
-        #
-        # - muA: absorption mean
-        # - sigmaA: absorption standard deviation
-        # - weights: sum of Io values
-        # - muT: transmission mean
-        # - sigmaT: transmission standard deviation
-        # - muIo: Io mean
-        # - sigmaIo: Io standard deviation
-        # - p: correlation coefficient between T and Io
-        # - counts: length of T
-        self._absorption = pd.DataFrame(
-            columns=['muA', 'sigmaA', 'weights', 'muT', 'sigmaT', 
-                     'muIo', 'sigmaIo', 'p', 'counts']
-        )
 
     def plot_digitizer_train(self, *, index=0, train_id=None, figsize=(8, 11.2),
                              x_min=None, x_max=None):
@@ -403,13 +400,6 @@ class XasDigitizer(XasProcessor):
                 self._I0, self._I1[channel])
             print("{} processed".format(channel.upper()))
 
-    def correlation(self):
-        """Override."""
-        data = {"XGM": self._I0}
-        data.update({ch.upper(): self._I1[ch] for ch in self._channels})
-            
-        return pd.DataFrame(data)
-
     def plot_correlation(self, channel="all", *, figsize=(8, 6),
                          marker_size=6, alpha=0.05, n_bins=20):
         """Generate correlation plots.
@@ -464,10 +454,6 @@ class XasDigitizer(XasProcessor):
             raise ValueError("Not understandable input!")
         
         return fig, axes
-
-    def absorption(self):
-        """Override."""
-        return self._absorption 
 
     def _check_adc_channels(self, run):
         """Check the selected FastAdc channels all contain data."""

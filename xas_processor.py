@@ -421,20 +421,27 @@ class XasDigitizer(XasProcessor):
             for ax, channel in zip(axes.flatten(), self._channels):
                 ax.scatter(self._I0, self._I1[channel], s=marker_size, alpha=alpha)
                 reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[channel])
+                absorption = self._absorption.loc[channel, :]
                 ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
-                        c='#FF8000', lw=2)
+                        c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".format(
+                        absorption["muA"], absorption["sigmaA"]))
+
                 ax.set_xlabel("$I_0$")
                 ax.set_ylabel("$I_1$")
                 ax.set_title(channel.upper())
+                ax.legend()
 
             fig.tight_layout()
         elif channel in self._channels:
+            absorption = self._absorption.loc[channel, :]
             axes[1][0].scatter(self._I0, self._I1[channel], s=marker_size, alpha=alpha)
             reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[channel])
             axes[1][0].plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
-                            c='#FF8000', lw=2)
+                c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".format(
+                    absorption["muA"], absorption["sigmaA"]))
             axes[1][0].set_xlabel("$I_0$")
             axes[1][0].set_ylabel("$I_1$")
+            axes[1][0].legend()
 
             axes[0][0].hist(self._I0, bins=n_bins)
             axes[0][0].axvline(self._I0.mean(), c='#6A0888', ls='--')
@@ -443,10 +450,16 @@ class XasDigitizer(XasProcessor):
             axes[1][1].axhline(self._I1[channel].mean(), c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
-                absorption = -np.log(np.abs(self._I1[channel] / self._I0)) 
-            axes[0][1].scatter(self._I0, absorption, s=marker_size, alpha=alpha)
+                absp = -np.log(np.abs(self._I1[channel] / self._I0)) 
+            axes[0][1].scatter(self._I0, absp, s=marker_size, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")
+            axes[0][1].axhline(
+                absorption['muA'], 
+                label="SNR@labs: {:.3g}".format(1./absorption['sigmaA']),
+                c='#FF8000', ls='--'
+            )
+            axes[0][1].legend()
             
             fig.suptitle(channel.upper())
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])

@@ -112,8 +112,12 @@ class XasProcessor(abc.ABC):
         print('Last train ID:        ', last_train)
         print('# of pulses per train:', self._n_pulses)
         print('First pulse ID:       ', self._pulse_id_min)
-        print('Min photon energy:    ', min(photon_energies), 'eV')
-        print('Max photon energy:    ', max(photon_energies), 'eV')
+        print('Min photon energy:    ', round(min(photon_energies), 4), 'eV')
+        print('Max photon energy:    ', round(max(photon_energies), 4), 'eV')
+
+        print('MCP channels:')
+        for channel, channel_id in self._channels.items():
+            print('    - {}: {}'.format(channel.upper(), channel_id))
 
     def _check_sources(self):
         """Check all the required sources are in the data."""

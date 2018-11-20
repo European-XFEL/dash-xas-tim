@@ -271,7 +271,7 @@ class XasFastADC(XasProcessor):
 
 
 class XasDigitizer(XasProcessor):
-    def __init__(self, *args, channels=('D', 'B', 'C', 'A'), 
+    def __init__(self, *args, channels=('D', 'C', 'B', 'A'), 
                  pulse_separation=880e-9, interleaved_mode=False, **kwargs):
         """
         

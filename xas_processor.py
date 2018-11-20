@@ -20,7 +20,7 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
                background_end, background_width, peak_interval):
     """Return a list of peaks.
     
-    :param trace:
+    :param xarray trace: trace for all the trains. shape = (trains, samples)
     :param int n_peaks: number of expected peaks.
     :param peak_start: start position of the first peak.
     :param peak_width: width of a peak.
@@ -46,102 +46,93 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     return peaks, backgrounds 
 
 
+def compute_sigma(mu1, sigma1, mu2, sigma2, corr):
+    """Compute error propagation for correlated data.
+    
+    :param float/Series mu1: dataset 1 mean.
+    :param float/Series sigma1: dataset 1 standard deviation. 
+    :param float/Series mu2: dataset 2 mean.
+    :param float/Series sigma2: dataset 2 standard deviation.
+    :param float/Series corr: correlation between dataset 1 and 2.
+
+    :return float/Series: standard deviation of mu2/mu1.
+    """
+    if mu1 == 0 or mu2 == 0:
+        raise ValueError("mu1 and mu2 cannot be zero!")
+
+    return np.sqrt((sigma1 / mu1) ** 2 + (sigma2 / mu2) ** 2 
+                   - 2 * corr * sigma1 * sigma2 / (mu1 * mu2))
+
+
 def compute_absorption(I0, I1):
     """Compute absorption.
     
     :param numpy.ndarray I0: incident beam intensity, 1D.
     :param numpy.ndarray I1: transmitted beam intensity, 1D.
 
-    :return float absorption_mean: average absorption.
-    :return float absorption_std: standard deviation of absorption.
+    :return float muA: absorption mean.
+    :return float sigmaA: absorption standard deviation.
+    :return float muI0: I0 mean.
+    :return float sigmaI0: I0 standard deviation.
     :return float weight: weight calculated from I0.
-    :return float I1_mean: average I1.
-    :return float I1_std: standard deviation of I1.
-    :return float I0_mean: average I0.
-    :return float I0_std: standard deviation of I0.
-    :return float p: correlation coefficient betwen I0 and I1.
+    :return float muI1: I1 mean.
+    :return float sigmaI1: I1 standard deviation.
+    :return float corr: correlation coefficient between I0 and I1.
     :return int count: number of data points.
     """
     count = len(I0)
 
-    I0_mean = I0.mean()
-    I0_std = I0.std()
+    muI0 = I0.mean()
+    sigmaI0 = I0.std()
     weight = np.sum(I0)
 
-    I1_mean = I1.mean()
-    I1_std = I1.std()
+    muI1 = I1.mean()
+    sigmaI1 = I1.std()
 
-    p = np.corrcoef(I1, I0)[0, 1]
+    corr = np.corrcoef(I1, I0)[0, 1]
 
     # we need the 'abs' for the background channel which has both positive
     # and negative data
-    absorption_mean = -np.log(abs(I1_mean)/I0_mean)
+    muA = -np.log(abs(muI1) / muI0)
+    sigmaA = compute_sigma(muI0, sigmaI0, muI1, sigmaI1, corr)
 
-    c1 = (I1_std / I1_mean) ** 2 + (I0_std / I0_mean) ** 2
-    c2 = 2 * I0_std * I1_std / (I0_mean * I1_mean)
-    absorption_std = np.sqrt(c1 - c2*p)
-
-    return absorption_mean, absorption_std, weight, I1_mean, I1_std, \
-        I0_mean, I0_std, p, count
+    return muA, sigmaA, muI0, sigmaI0, weight, muI1, sigmaI1, corr, count
 
 
 class XasProcessor(abc.ABC):
     """Abstract class for Xray Absoprtion Spectroscopy analysis."""
     sources = {
-        'mono': 'SA3_XTD10_MONO/MDL/PHOTON_ENERGY',
-        'xgm':'SCS_BLU_XGM/XGM/DOOCS',
-        'xgm_output': 'SCS_BLU_XGM/XGM/DOOCS:output',
-        'sa3_xgm': 'SA3_XTD10_XGM/XGM/DOOCS',
-        'sa3_xgm_output': 'SA3_XTD10_XGM/XGM/DOOCS:output'
+        'MONO': 'SA3_XTD10_MONO/MDL/PHOTON_ENERGY',
+        'XGM':'SCS_BLU_XGM/XGM/DOOCS',
+        'XGM_OUTPUT': 'SCS_BLU_XGM/XGM/DOOCS:output',
+        'SA3_XGM': 'SA3_XTD10_XGM/XGM/DOOCS',
+        'SA3_XGM_OUTPUT': 'SA3_XTD10_XGM/XGM/DOOCS:output'
     }
 
-    def __init__(self, run_folder, *, pulse_id_min=0, n_pulses=1):
+    def __init__(self, run_folder):
         """Initialization.
         
         :param str run_folder: full path of the run folder.
-        :param int pulse_id_min: start of the pulse ID.
-        :param int n_pulses: number of pulses in a train.
         """
         self._run = RunDirectory(run_folder)
 
-        self._pulse_id_min = pulse_id_min
-        self._n_pulses = n_pulses
-
         # get the DataFrame for XGM control data
         self._xgm_df = self._run.get_dataframe(
-            fields=[(self.sources['xgm'], '*value')])
+            fields=[(self.sources['XGM'], '*value')])
         self._xgm_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
         self._sa3_xgm_df = self._run.get_dataframe(
-            fields=[(self.sources['sa3_xgm'], '*value')])
+            fields=[(self.sources['SA3_XGM'], '*value')])
         self._sa3_xgm_df.rename(columns=lambda x: x.split('/')[-1],
                                 inplace=True)
         
         # get the DataFrame for SoftMono control data
         self._mono_df = self._run.get_dataframe(
-            fields=[(self.sources['mono'], '*value')])
+            fields=[(self.sources['MONO'], '*value')])
         self._mono_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
 
         self._photon_energies = None  # photon energies for each pulse
         self._I0 = None 
         self._I1 = OrderedDict()
-
-        # the naming convention of the columns is in line with the code
-        # provided by Loic Le Guyader:
-        #
-        # - muA: absorption mean
-        # - sigmaA: absorption standard deviation
-        # - weights: sum of Io values
-        # - muT: transmission mean
-        # - sigmaT: transmission standard deviation
-        # - muIo: Io mean
-        # - sigmaIo: Io standard deviation
-        # - p: correlation coefficient between T and Io
-        # - counts: length of T
-        # TODO: consider to change them to more Pythonic names
-        self._absorption = pd.DataFrame(
-            columns=['muA', 'sigmaA', 'weights', 'muT', 'sigmaT', 
-                     'muIo', 'sigmaIo', 'p', 'counts']
-        )
 
     def info(self):
         """Print out information of the run(s)."""
@@ -156,14 +147,12 @@ class XasProcessor(abc.ABC):
         print('Duration:             ', span_txt)
         print('First train ID:       ', first_train)
         print('Last train ID:        ', last_train)
-        print('# of pulses per train:', self._n_pulses)
-        print('First pulse ID:       ', self._pulse_id_min)
         print('Min photon energy:    ', round(photon_energies.min(), 4), 'eV')
         print('Max photon energy:    ', round(photon_energies.max(), 4), 'eV')
 
         print('MCP channels:')
-        for channel, channel_id in self._channels.items():
-            print('    - {}: {}'.format(channel.upper(), channel_id))
+        for ch, channel_id in self._channels.items():
+            print('    - {}: {}'.format(ch, channel_id))
 
     def _check_sources(self):
         """Check all the required sources are in the data."""
@@ -222,14 +211,14 @@ class XasProcessor(abc.ABC):
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
 
-        ax1.plot(data[self.sources['sa3_xgm_output']]['data.intensityTD'],
+        ax1.plot(data[self.sources['SA3_XGM_OUTPUT']]['data.intensityTD'],
                  marker='.')
-        ax2.plot(data[self.sources['xgm_output']]['data.intensityTD'],
+        ax2.plot(data[self.sources['XGM_OUTPUT']]['data.intensityTD'],
                  marker='.')
         for ax in (ax1, ax2):
             ax.set_ylabel(r"Pulse energy ($\mu$J)")
-            ax.set_xlim((self._pulse_id_min - 0.5, 
-                         self._pulse_id_min + self._n_pulses + 0.5))
+            ax.set_xlim((-0.5, 100.5))
+
         ax1.set_title("SA3 XGM")
         ax2.set_title("SCS XGM")
         ax2.set_xlabel("Pulse ID")
@@ -239,15 +228,17 @@ class XasProcessor(abc.ABC):
         return fig, (ax1, ax2)
 
     @abc.abstractmethod
-    def process(self, config):
+    def process(self, pulse_id0, n_pulses, *, config=None):
         """Process the run data.
         
+        :param int pulse_id0: first pulse ID.
+        :param int n_pulses: number of pulses in a train.
         :param dict config: configuration for integrating of digitizer signal.
         """
         pass
 
     @abc.abstractmethod
-    def get_dataframe(self):
+    def get_data(self):
         """Get the pulse-resolved data in pandas.DataFrame.
 
         :return pandas.DataFrame: pulse resolved data in pandas.DataFrame.
@@ -259,12 +250,40 @@ class XasProcessor(abc.ABC):
         return self._absorption
 
     @abc.abstractmethod
+    def compute_total_absorption(self):
+        """Compute absorption for all data.
+
+        :return: total absorption dta in pandas.DataFrame with index being the 
+            MCP channel name and columns being:
+            - muA: absorption mean;
+            - sigmaA: absorption standard deviation;
+            - muI0: I0 mean;
+            - sigmaI0: I0 standard deviation;
+            - weight: sum of I0 values;
+            - muI1: I1 mean;
+            - sigmaI1: I1 standard deviation;
+            - corr: correlation coefficient between I0 and I1;
+            - count: number of data.
+        """
+        pass
+
+    @abc.abstractmethod
     def compute_spectrum(self, n_bins=20):
-        """Calculate spectrum.
+        """Compute spectrum.
         
         :param int n_bins: number of energy bins.
 
-        :return: spectrum data in pandas.DataFrame.
+        :return: spectrum data in pandas.DataFrame with index being the 
+            energy bin range and columnsbeing: 
+            - energy: central energy of each bin;
+            - count: number of data points for each energy bin;
+            - muXGM, muMCP1, muMCP2, muMCP3, muMCP4: intensity mean;
+            - sigmaXGM, sigmaMCP1, sigmaMCP2, sigmaMCP3, sigmaMCP4: intensity standard 
+                deviations;
+            - muA1, muA2, muA3, muA4: absorption mean;
+            - sigmaA1, sigmaA2, sigmaA3, sigmaA4: absorption standard deviation;
+            - corrMCP1, corrMCP2, corrMCP3, corrMCP4: correlation between 
+                MCP and XGM.
         """
         pass
 
@@ -280,7 +299,7 @@ class XasFastADC(XasProcessor):
 class XasDigitizer(XasProcessor):
     def __init__(self, *args, channels=('D', 'C', 'B', 'A'), 
                  pulse_separation=880e-9, interleaved_mode=False, **kwargs):
-        """
+        """Initialization.
         
         :param tuple channels: names of AdqDigitizer channels which 
             connects to MCP1 to MCP4.
@@ -291,12 +310,12 @@ class XasDigitizer(XasProcessor):
         super().__init__(*args, **kwargs)
 
         self.sources.update({
-            'digitizer': 'SCS_UTC1_ADQ/ADC/1',
-            'digitizer_output': 'SCS_UTC1_ADQ/ADC/1:network'
+            'DIGITIZER': 'SCS_UTC1_ADQ/ADC/1',
+            'DIGITIZER_OUTPUT': 'SCS_UTC1_ADQ/ADC/1:network'
         })
-        self._channels = {'mcp{}'.format(i+1): 
+        self._channels = {'MCP{}'.format(i): 
                           "digitizers.channel_1_{}.raw.samples".format(ch)
-                          for i, ch in enumerate(channels)}
+                          for i, ch in enumerate(channels, 1)}
 
         self._check_sources()
 
@@ -323,7 +342,7 @@ class XasDigitizer(XasProcessor):
         else:
             tid, data = self._run.train_from_id(train_id)
 
-        digitizer_raw_data = {key: data[self.sources['digitizer_output']][value] 
+        digitizer_raw_data = {key: data[self.sources['DIGITIZER_OUTPUT']][value] 
                               for key, value in self._channels.items()}
 
         n_channels = len(self._channels)
@@ -344,10 +363,11 @@ class XasDigitizer(XasProcessor):
 
         return fig, axes
 
-    def _integrate_channel(self, channel_id, config):
+    def _integrate_channel(self, channel_id, n_pulses, config):
         """Integration of a FastAdc channel for all trains in a run.
  
         :param str channel_id: full name of the output channel.
+        :param int n_pulses: number of pulses in a train.
         :param dict config: configuration for integrating of digitizer signal.
             If None, use automatic peak finding. If not, the following keys
             are mandantory:
@@ -363,7 +383,7 @@ class XasDigitizer(XasProcessor):
         :return numpy.ndarray: 1D array holding integration result for
             each train.
         """
-        trace  = self._run.get_array(self.sources['digitizer_output'],
+        trace  = self._run.get_array(self.sources['DIGITIZER_OUTPUT'],
                                      channel_id)
 
         if config is None:
@@ -372,8 +392,8 @@ class XasDigitizer(XasProcessor):
             cfg = {"auto": False}
             cfg.update(config)
 
-        peaks, backgrounds = find_peaks(trace, self._n_pulses, 
-                                        cfg['sample_start'], 
+        peaks, backgrounds = find_peaks(trace, n_pulses, 
+                                        cfg['peak_start'], 
                                         cfg['peak_width'], 
                                         cfg['background_end'], 
                                         cfg['background_width'], 
@@ -385,17 +405,17 @@ class XasDigitizer(XasProcessor):
 
         return np.ravel(ret, order="F") 
 
-    def process(self, config=None):
+    def process(self, pulse_id0, n_pulses, *, config=None):
         """Override."""
         # self._I0 is a numpy.ndarray
         self._I0 = self._run.get_array(
-            self.sources['xgm_output'], 'data.intensityTD').values[...,
-                self._pulse_id_min:
-                self._pulse_id_min + self._n_pulses].flatten()
+            self.sources['XGM_OUTPUT'], 'data.intensityTD').values[...,
+                pulse_id0:pulse_id0 + n_pulses].flatten()
 
         for channel, channel_id in self._channels.items():
             # self._I1 is a list of numpy.ndarray
-            self._I1[channel] = self._integrate_channel(channel_id, config)
+            self._I1[channel] = self._integrate_channel(
+                channel_id, n_pulses, config)
 
         # set condition for valid data: I0 > 0 and I1 < 0 
         channels = list(self._channels.keys())
@@ -410,107 +430,203 @@ class XasDigitizer(XasProcessor):
         # apply condition to all the useful pulse resolved data here
         self._I0 = self._I0[condition]
         self._photon_energies = np.repeat(self._mono_df['actualEnergy'], 
-                                          self._n_pulses)[condition]
+                                          n_pulses)[condition]
 
         for channel in self._channels:
             # Note: the sign of I1 is reversed here!!!
             self._I1[channel] = -self._I1[channel][condition]
-            self._absorption.loc[channel] = compute_absorption(
-                self._I0, self._I1[channel])
 
-    def get_dataframe(self):
+    def get_data(self):
         """Override."""
         data = {'energy': self._photon_energies, "XGM": self._I0}
-        data.update({ch.upper(): self._I1[ch] for ch in self._channels})
+        data.update({ch: self._I1[ch] for ch in self._channels})
             
         return pd.DataFrame(data)
 
+    def compute_total_absorption(self):
+        """Override."""
+        data = self.get_data()
+
+        absorption = pd.DataFrame(
+            columns=['muA', 'sigmaA', 'muI0', 'sigmaI0', 'weight', 
+                     'muI1', 'sigmaI1', 'corr', 'count']
+        )
+
+        for ch in self._channels:
+            absorption.loc[ch] = compute_absorption(data['XGM'], data[ch])
+
+        return absorption
+
     def compute_spectrum(self, n_bins=20):
         """Override."""
-        data = self.get_dataframe()
+        data = self.get_data()
 
-        spectrum = data.groupby(pd.cut(data['energy'], bins=n_bins)).mean()
-        for i, channel in enumerate(self._channels):
-            spectrum['muA{}'.format(i)] = \
-                (spectrum[channel.upper()] / spectrum['XGM']).apply(
-                    lambda x: -np.log(x))
+        binned = data.groupby(pd.cut(data['energy'], bins=n_bins))
+
+        binned_mean = binned.mean()
+        binned_mean.columns = ['mu' + col if col != 'energy' else col
+                               for col in binned_mean.columns]
+
+        binned_std = binned.std()
+        binned_std.drop("energy", axis=1, inplace=True)
+        binned_std.columns = ['sigma' + col for col in binned_std.columns]
+
+        # correlation
+        binned_corr = binned.corr().loc[pd.IndexSlice[:, 'XGM'], :].drop(
+            columns=['XGM', 'energy'], axis=1).reset_index(level=1, drop=True)
+        binned_corr.columns = ['corr' + col for col in binned_corr.columns]
+
+        spectrum = pd.concat([binned_mean, binned_std, binned_corr], axis=1) 
+        spectrum['count'] = binned['energy'].count()
+
+        # calculate absorption and its sigma for each bin
+        for i, ch in enumerate(self._channels, 1):
+            spectrum['muA{}'.format(i)] = spectrum.apply(
+                lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']), 
+                axis=1)
+            spectrum['sigmaA{}'.format(i)] = spectrum.apply(
+                lambda x: compute_sigma(x['muXGM'], x['sigmaXGM'], x['mu' + ch], 
+                                        x['sigma' + ch], x['corr' + ch]), axis=1) 
 
         return spectrum
 
-    def plot_correlation(self, channel="all", *, figsize=(8, 6),
-                         marker_size=6, alpha=0.05, n_bins=20):
+    def plot_correlation(self, channel=None, *, figsize=(8, 6), ms=6, 
+                         alpha=0.05, n_bins=20):
         """Generate correlation plots.
         
-        :param str channel: MCP channel name, e.g. mcp1, for visualizing
-            a single channel with four plots, or 'all' for visualizing all 
-            the channels with one plot each. Case insensitive.
+        :param str channel: MCP channel name, e.g. MCP1, for visualizing
+            a single channel with four plots, or None (default) for 
+            visualizing all the channels with one plot each. 
+            Case insensitive.
         :param tuple figsize: figure size.
-        :param int marker_size: marker size for the scatter plots.
+        :param int ms: marker size for the scatter plots.
         :param float alpha: transparency for the scatter plots.
         :param int n_bins: number of bins for the histogram plots.
         """
         import matplotlib.pyplot as plt
         from sklearn.linear_model import LinearRegression
+        
+        absorption = self.compute_total_absorption()
 
         fig, axes = plt.subplots(2, 2, figsize=figsize)
-        channel = channel.lower()
-        if channel == "all":
-            for ax, channel in zip(axes.flatten(), self._channels):
-                ax.scatter(self._I0, self._I1[channel],
-                           s=marker_size, alpha=alpha)
-                reg = LinearRegression().fit(self._I0.reshape(-1, 1),
-                                             self._I1[channel])
 
-                absorption = self._absorption.loc[channel, :]
+        if channel is None:
+            for ax, ch in zip(axes.flatten(), self._channels):
+                ax.scatter(self._I0, self._I1[ch], s=ms, alpha=alpha)
+                reg = LinearRegression().fit(self._I0.reshape(-1, 1),
+                                             self._I1[ch])
+
                 ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
                         c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".
-                        format(absorption["muA"], absorption["sigmaA"]))
+                        format(absorption.loc[ch, "muA"], 
+                               absorption.loc[ch, "sigmaA"]))
 
                 ax.set_xlabel("$I_0$")
                 ax.set_ylabel("$I_1$")
-                ax.set_title(channel.upper())
+                ax.set_title(ch)
                 ax.legend()
 
             fig.tight_layout()
-        elif channel in self._channels:
-            absorption = self._absorption.loc[channel, :]
-            axes[1][0].scatter(self._I0, self._I1[channel],
-                               s=marker_size, alpha=alpha)
-            reg = LinearRegression().fit(self._I0.reshape(-1, 1),
-                                         self._I1[channel])
+        elif channel.upper() in self._channels:
+            ch = channel.upper()
+            axes[1][0].scatter(self._I0, self._I1[ch], s=ms, alpha=alpha)
+            reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[ch])
             axes[1][0].plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
                 c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".format(
-                    absorption["muA"], absorption["sigmaA"]))
+                    absorption.loc[ch, "muA"], 
+                    absorption.loc[ch, "sigmaA"]))
             axes[1][0].set_xlabel("$I_0$")
             axes[1][0].set_ylabel("$I_1$")
             axes[1][0].legend()
 
             axes[0][0].hist(self._I0, bins=n_bins)
-            axes[0][0].axvline(absorption['muIo'], c='#6A0888', ls='--')
+            axes[0][0].axvline(absorption.loc[ch, 'muI0'], c='#6A0888', ls='--')
 
-            axes[1][1].hist(self._I1[channel],
-                            bins=n_bins, orientation='horizontal')
-            axes[1][1].axhline(absorption['muT'], c='#6A0888', ls='--')
+            axes[1][1].hist(self._I1[ch], bins=n_bins, orientation='horizontal')
+            axes[1][1].axhline(absorption.loc[ch, 'muI1'], c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
-                absp = -np.log(abs(self._I1[channel]) / self._I0) 
-            axes[0][1].scatter(self._I0, absp, s=marker_size, alpha=alpha)
+                absp = -np.log(abs(self._I1[ch]) / self._I0) 
+            axes[0][1].scatter(self._I0, absp, s=ms, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")
             axes[0][1].axhline(
-                absorption['muA'], c='#FF8000', ls='--',
-                label="SNR@labs: {:.3g}".format(1./absorption['sigmaA']),
+                absorption.loc[ch, 'muA'], c='#FF8000', ls='--',
+                label="SNR@labs: {:.3g}".format(1./absorption.loc[ch, 'sigmaA']),
             )
             axes[0][1].legend()
             
-            fig.suptitle(channel.upper())
+            fig.suptitle(ch)
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
         else:
             raise ValueError("Not understandable input!")
         
         return fig, axes
 
-    def plot_spectrum(self, n_bins=20, channel="all", *, figsize=(8, 6)):
-        """Generate spectrum plots."""
-        spectrum = self.compute_spectrum(nbins=nbins)
+    def plot_spectrum(self, channel=None, *, figsize=(6, 4.5), capsize=4, 
+                      n_bins=20, use_transmission=False):
+        """Generate spectrum plots.
+
+        :param str channel: MCP channel name, e.g. MCP1, for visualizing
+            a single channel, or None (default) for visualizing MCP1-3 
+            altogether. Case insensitive.
+        :param tuple figsize: figure size.
+        :param int capsize: cap size for the error bar.
+        :param int n_bins: number of energy bins.
+        :param bool use_transmission: False for plotting energy vs. 
+            absorption, while True for plotting energy vs. I1. Default = False
+        """
+        import matplotlib.pyplot as plt
+
+        spectrum = self.compute_spectrum(n_bins=n_bins)
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        if channel is None:
+            if use_transmission:
+                y1 = spectrum.muMCP1
+                y1_err = spectrum.sigmaMCP1 / spectrum['count'].apply(np.sqrt)
+                y2 = spectrum.muMCP2
+                y2_err = spectrum.sigmaMCP2 / spectrum['count'].apply(np.sqrt)
+                y3 = spectrum.muMCP3
+                y3_err = spectrum.sigmaMCP3 / spectrum['count'].apply(np.sqrt)
+            else:
+                y1 = spectrum.muA1
+                y1_err = spectrum.sigmaA1 / spectrum['count'].apply(np.sqrt)
+                y2 = spectrum.muA2
+                y2_err = spectrum.sigmaA2 / spectrum['count'].apply(np.sqrt)
+                y3 = spectrum.muA3
+                y3_err = spectrum.sigmaA3 / spectrum['count'].apply(np.sqrt)
+
+            ax.errorbar(spectrum.energy, y1, y1_err,
+                        capsize=capsize, fmt='.', label="MCP1")
+            ax.errorbar(spectrum.energy, y2, y2_err,
+                        capsize=capsize, fmt='.', label="MCP2")
+            ax.errorbar(spectrum.energy, y3, y3_err,
+                        capsize=capsize, fmt='.', label="MCP3")
+        elif channel.upper() in self._channels:
+            ch = channel.upper()
+            idx = list(self._channels.keys()).index(ch) + 1
+
+            if use_transmission:
+                y = spectrum['mu' + ch]
+                y_err = spectrum['sigma' + ch] / spectrum['count'].apply(np.sqrt)
+            else:
+                y = spectrum['muA{}'.format(idx)]
+                y_err = spectrum['sigmaA{}'.format(idx)] / spectrum['count'].apply(np.sqrt)
+
+            ax.errorbar(spectrum.energy, y, y_err,
+                        fmt='.', capsize=capsize, label=ch)
+
+        ax.set_xlabel("Energy (eV)")
+        if use_transmission:
+            ax.set_ylabel("I1")
+        else:
+            ax.set_ylabel("Absorption")
+
+        ax.legend()
+
+        fig.tight_layout()
+
+        return fig, ax
 

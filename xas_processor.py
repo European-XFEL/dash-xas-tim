@@ -46,17 +46,34 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     return peaks, backgrounds 
 
 
-def compute_absorption(intensity_in, intensity_out):
+def compute_absorption(I0, I1):
     """Compute absorption.
     
-    :param numpy.ndarray intensity_in: incident beam intensity, 1D.
-    :param numpy.ndarray intensity_out: transmitted beam intensity, 1D.
+    :param numpy.ndarray I0: incident beam intensity, 1D.
+    :param numpy.ndarray I1: transmitted beam intensity, 1D.
 
-    :returns:
+    :returns: average absorption, standard deviation of absorption,
+        weight, average I1, standard deviation of I1, average I0,
+        standard deviation of I0, correlation coefficient betwen
+        I0 and I1, number of data points.
     """    
-    with np.errstate(divide='ignore', invalid='ignore'):
-        absorption = -np.log(np.abs(intensity_out/intensity_in)) 
-    return absorption, np.zeros_like(absorption)
+    I0_mean = I0.mean()
+    I0_std = I0.std()
+    weight = np.sum(I0)
+
+    I1_mean = I1.mean()
+    I1_std = I1.std()
+
+    p = np.corrcoef(I1, I0)[0, 1]
+
+    absorption_mean = -np.log(abs(I1_mean)/I0_mean)
+
+    c1 = (I1_std / I1_mean) ** 2 + (I0_std / I0_mean) ** 2
+    c2 = 2 * I0_std * I1_std / (I0_mean * I1_mean)
+    absorption_sigma = np.sqrt(c1 - c2*p) 
+
+    return absorption_mean, absorption_sigma, weight, I1_mean, I1_std, \
+        I0_mean, I0_std, p, len(I0)
 
 
 class XasProcessor(abc.ABC):
@@ -207,12 +224,10 @@ class XasProcessor(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def spectrum(self, name):
-        """Get a pandas.DataFrame for spectrum analysis..
+    def absorption(self):
+        """Get the absorption data in pandas.DataFrame.
         
-        :param str name: name of I1. For example, the name of a MCP channel. 
-
-        :return pandas.DataFrame: DataFrame with spectrum data in columns. 
+        :return pandas.DataFrame: DataFrame with absorption data in columns. 
         """
         pass
 
@@ -228,7 +243,7 @@ class XasFastADC(XasProcessor):
 class XasDigitizer(XasProcessor):
     def __init__(self, *args, channels=('D', 'B', 'C', 'A'), 
                  pulse_separation=880e-9, interleaved_mode=False, **kwargs):
-        """Initialization.
+        """
         
         :param tuple channels: names of AdqDigitizer channels which 
             connects to MCP1 to MCP4.
@@ -255,12 +270,25 @@ class XasDigitizer(XasProcessor):
         
         self._I0 = None 
         self._I1 = OrderedDict()
-        self._absorption = OrderedDict()
-        self._absorption_sigma = OrderedDict()
         for ch in self._channels:
             self._I1[ch] = None 
-            self._absorption[ch] = None
-            self._absorption_sigma[ch] = None
+
+        # the naming convention of the columns is in line with the code
+        # provided by Loic Le Guyader:
+        #
+        # - muA: absorption mean
+        # - sigmaA: absorption standard deviation
+        # - weights: sum of Io values
+        # - muT: transmission mean
+        # - sigmaT: transmission standard deviation
+        # - muIo: Io mean
+        # - sigmaIo: Io standard deviation
+        # - p: correlation coefficient between T and Io
+        # - counts: length of T
+        self._absorption = pd.DataFrame(
+            columns=['muA', 'sigmaA', 'weights', 'muT', 'sigmaT', 
+                     'muIo', 'sigmaIo', 'p', 'counts']
+        )
 
     def plot_digitizer_train(self, *, index=0, train_id=None, figsize=(8, 11.2),
                              x_min=None, x_max=None):
@@ -371,8 +399,8 @@ class XasDigitizer(XasProcessor):
         self._I0 = self._I0[condition]
         for channel in self._channels:
             self._I1[channel] = self._I1[channel][condition]
-            self._absorption[channel], self._absorption_sigma[channel] = \
-                    compute_absorption(self._I0, self._I1[channel])
+            self._absorption.loc[channel] = compute_absorption(
+                self._I0, self._I1[channel])
             print("{} processed".format(channel.upper()))
 
     def correlation(self):
@@ -404,7 +432,7 @@ class XasDigitizer(XasProcessor):
                 ax.scatter(self._I0, self._I1[channel], s=marker_size, alpha=alpha)
                 reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[channel])
                 ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
-                                c='#FF8000', lw=2)
+                        c='#FF8000', lw=2)
                 ax.set_xlabel("$I_0$")
                 ax.set_ylabel("$I_1$")
                 ax.set_title(channel.upper())
@@ -424,8 +452,9 @@ class XasDigitizer(XasProcessor):
             axes[1][1].hist(self._I1[channel], bins=n_bins, orientation='horizontal')
             axes[1][1].axhline(self._I1[channel].mean(), c='#6A0888', ls='--')
 
-            axes[0][1].scatter(self._I0, self._absorption[channel], 
-                               s=marker_size, alpha=alpha)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                absorption = -np.log(np.abs(self._I1[channel] / self._I0)) 
+            axes[0][1].scatter(self._I0, absorption, s=marker_size, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")
             
@@ -436,16 +465,9 @@ class XasDigitizer(XasProcessor):
         
         return fig, axes
 
-    def spectrum(self, channel):
-        """Return a pandas.DataFrame representation of the spectrum."""
-        df = pd.DataFrame({
-            "photon_energy": self._mono_df['actualEnergy'],
-            "absorption": self._absorptions, 
-            "absorption_sigma": self._absorption_sigmas, 
-            "weight": self._weights 
-            })
-
-        return df
+    def absorption(self):
+        """Override."""
+        return self._absorption 
 
     def _check_adc_channels(self, run):
         """Check the selected FastAdc channels all contain data."""

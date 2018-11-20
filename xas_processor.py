@@ -7,7 +7,6 @@ Copyright (C) European X-Ray Free-Electron Laser Facility GmbH.
 All rights reserved.
 """
 import abc
-import re
 from collections import OrderedDict
 import datetime
 
@@ -22,14 +21,15 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     """Return a list of peaks.
     
     :param trace:
-    :param n_peaks:
-    :param peak_start:
-    :param peak_width:
-    :param background_end:
-    :param background_width:
-    :param peak_interval:
+    :param int n_peaks: number of expected peaks.
+    :param peak_start: start position of the first peak.
+    :param peak_width: width of a peak.
+    :param background_end: end position of the background for the first peak.
+    :param background_width: width of a background.
+    :param peak_interval: gap between peaks.
 
-    :returns:
+    :return list peaks: a list of peak data in 1D numpy.ndarray.
+    :return list backgrounds: a list of background data in 1D numpy.ndarray.
     """
     peaks = []
     backgrounds = []
@@ -52,11 +52,18 @@ def compute_absorption(I0, I1):
     :param numpy.ndarray I0: incident beam intensity, 1D.
     :param numpy.ndarray I1: transmitted beam intensity, 1D.
 
-    :returns: average absorption, standard deviation of absorption,
-        weight, average I1, standard deviation of I1, average I0,
-        standard deviation of I0, correlation coefficient betwen
-        I0 and I1, number of data points.
-    """    
+    :return float absorption_mean: average absorption.
+    :return float absorption_std: standard deviation of absorption.
+    :return float weight: weight calculated from I0.
+    :return float I1_mean: average I1.
+    :return float I1_std: standard deviation of I1.
+    :return float I0_mean: average I0.
+    :return float I0_std: standard deviation of I0.
+    :return float p: correlation coefficient betwen I0 and I1.
+    :return int count: number of data points.
+    """
+    count = len(I0)
+
     I0_mean = I0.mean()
     I0_std = I0.std()
     weight = np.sum(I0)
@@ -72,10 +79,10 @@ def compute_absorption(I0, I1):
 
     c1 = (I1_std / I1_mean) ** 2 + (I0_std / I0_mean) ** 2
     c2 = 2 * I0_std * I1_std / (I0_mean * I1_mean)
-    absorption_sigma = np.sqrt(c1 - c2*p) 
+    absorption_std = np.sqrt(c1 - c2*p)
 
-    return absorption_mean, absorption_sigma, weight, I1_mean, I1_std, \
-        I0_mean, I0_std, p, len(I0)
+    return absorption_mean, absorption_std, weight, I1_mean, I1_std, \
+        I0_mean, I0_std, p, count
 
 
 class XasProcessor(abc.ABC):
@@ -106,7 +113,8 @@ class XasProcessor(abc.ABC):
         self._xgm_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
         self._sa3_xgm_df = self._run.get_dataframe(
             fields=[(self.sources['sa3_xgm'], '*value')])
-        self._sa3_xgm_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
+        self._sa3_xgm_df.rename(columns=lambda x: x.split('/')[-1],
+                                inplace=True)
 
         # get the DataFrame for Softmono control data
         self._mono_df = self._run.get_dataframe(
@@ -128,6 +136,7 @@ class XasProcessor(abc.ABC):
         # - sigmaIo: Io standard deviation
         # - p: correlation coefficient between T and Io
         # - counts: length of T
+        # TODO: consider to change them to more Pythonic names
         self._absorption = pd.DataFrame(
             columns=['muA', 'sigmaA', 'weights', 'muT', 'sigmaT', 
                      'muIo', 'sigmaIo', 'p', 'counts']
@@ -173,7 +182,8 @@ class XasProcessor(abc.ABC):
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
         ax1_tw = ax1.twinx()
 
-        ln1 = ax1.plot(self._xgm_df['pulseEnergy.photonFlux'], label=r"Pulse energy ($\mu$J)")
+        ln1 = ax1.plot(self._xgm_df['pulseEnergy.photonFlux'],
+                       label=r"Pulse energy ($\mu$J)")
         number_of_bunches = self._xgm_df['pulseEnergy.nummberOfBrunches']
         ln2 = ax1_tw.plot(number_of_bunches, label="Number of pulses", c='g')
 
@@ -212,8 +222,10 @@ class XasProcessor(abc.ABC):
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
 
-        ax1.plot(data[self.sources['sa3_xgm_output']]['data.intensityTD'], marker='.')
-        ax2.plot(data[self.sources['xgm_output']]['data.intensityTD'], marker='.')
+        ax1.plot(data[self.sources['sa3_xgm_output']]['data.intensityTD'],
+                 marker='.')
+        ax2.plot(data[self.sources['xgm_output']]['data.intensityTD'],
+                 marker='.')
         for ax in (ax1, ax2):
             ax.set_ylabel(r"Pulse energy ($\mu$J)")
             ax.set_xlim((self._pulse_id_min - 0.5, 
@@ -289,8 +301,8 @@ class XasDigitizer(XasProcessor):
         for ch in self._channels:
             self._I1[ch] = None 
 
-    def plot_digitizer_train(self, *, index=0, train_id=None, figsize=(8, 11.2),
-                             x_min=None, x_max=None):
+    def plot_digitizer_train(self, *, index=0, train_id=None,
+                             figsize=(8, 11.2), x_min=None, x_max=None):
         """Plot digitizer signals in a given train.
 
         :param int index: train index. Ignored if train_id is given.
@@ -308,17 +320,7 @@ class XasDigitizer(XasProcessor):
                               for key, value in self._channels.items()}
 
         n_channels = len(self._channels)
-        total_samples = len(list(digitizer_raw_data.values())[0])
 
-#         traces = []
-#         for i, (key, value) in enumerate(digitizer_raw_data.items()):
-#              traces.append(go.Scatter(x=np.arange(end-start), y=value[start:end], name=key, mode="lines"))
-#                         
-#              layout = dict(xaxis=dict(title='Samples'), yaxis=dict(title='Intensity (arb.)'), 
-#                            legend=dict(orientation="h", xanchor="center", y=1.1, x=0.5))
-# 
-#              fig = dict(data=traces, layout=layout)    
-#              iplot(fig)  
         import matplotlib.pyplot as plt
 
         fig, axes = plt.subplots(n_channels, 1, figsize=figsize)
@@ -351,9 +353,11 @@ class XasDigitizer(XasProcessor):
             - background_width: int
                 Background width.
 
-        :return numpy.ndarray: 1D array holding integration result for each train. 
+        :return numpy.ndarray: 1D array holding integration result for
+            each train.
         """
-        trace  = self._run.get_array(self.sources['digitizer_output'], channel_id)
+        trace  = self._run.get_array(self.sources['digitizer_output'],
+                                     channel_id)
 
         if config is None:
             cfg = {"auto": True}
@@ -379,7 +383,8 @@ class XasDigitizer(XasProcessor):
         # self._I0 is a numpy.ndarray
         self._I0 = self._run.get_array(
             self.sources['xgm_output'], 'data.intensityTD').values[...,
-                self._pulse_id_min: self._pulse_id_min + self._n_pulses].flatten()
+                self._pulse_id_min:
+                self._pulse_id_min + self._n_pulses].flatten()
 
         for channel, channel_id in self._channels.items():
             # self._I1 is a list of numpy.ndarray
@@ -421,12 +426,15 @@ class XasDigitizer(XasProcessor):
         channel = channel.lower()
         if channel == "all":
             for ax, channel in zip(axes.flatten(), self._channels):
-                ax.scatter(self._I0, self._I1[channel], s=marker_size, alpha=alpha)
-                reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[channel])
+                ax.scatter(self._I0, self._I1[channel],
+                           s=marker_size, alpha=alpha)
+                reg = LinearRegression().fit(self._I0.reshape(-1, 1),
+                                             self._I1[channel])
+
                 absorption = self._absorption.loc[channel, :]
                 ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
-                        c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".format(
-                        absorption["muA"], absorption["sigmaA"]))
+                        c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".
+                        format(absorption["muA"], absorption["sigmaA"]))
 
                 ax.set_xlabel("$I_0$")
                 ax.set_ylabel("$I_1$")
@@ -436,8 +444,10 @@ class XasDigitizer(XasProcessor):
             fig.tight_layout()
         elif channel in self._channels:
             absorption = self._absorption.loc[channel, :]
-            axes[1][0].scatter(self._I0, self._I1[channel], s=marker_size, alpha=alpha)
-            reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[channel])
+            axes[1][0].scatter(self._I0, self._I1[channel],
+                               s=marker_size, alpha=alpha)
+            reg = LinearRegression().fit(self._I0.reshape(-1, 1),
+                                         self._I1[channel])
             axes[1][0].plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
                 c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".format(
                     absorption["muA"], absorption["sigmaA"]))
@@ -448,7 +458,8 @@ class XasDigitizer(XasProcessor):
             axes[0][0].hist(self._I0, bins=n_bins)
             axes[0][0].axvline(absorption['muIo'], c='#6A0888', ls='--')
 
-            axes[1][1].hist(self._I1[channel], bins=n_bins, orientation='horizontal')
+            axes[1][1].hist(self._I1[channel],
+                            bins=n_bins, orientation='horizontal')
             axes[1][1].axhline(absorption['muT'], c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
@@ -468,17 +479,3 @@ class XasDigitizer(XasProcessor):
             raise ValueError("Not understandable input!")
         
         return fig, axes
-
-    def _check_adc_channels(self, run):
-        """Check the selected FastAdc channels all contain data."""
-        tid, data = run.train_from_index(0)
-
-        activate_adc_channels = []
-        for key, value in sorted(data.items()):
-            if re.search(re.compile(r"{}.*output".format(self._adc_id)), key) and 'data.rawData' in value:
-                activate_adc_channels.append(key)
-                            
-        for ch in self._adc_channels.values():
-            if ch not in activate_adc_channels:
-                raise ValueError("{} is not an active FastAdc channel in train {}!".format(ch, tid))
-

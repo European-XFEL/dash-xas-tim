@@ -518,7 +518,7 @@ class XasDigitizer(XasProcessor):
         if channel is None:
             for ax, ch in zip(axes.flatten(), self._channels):
                 I1 = self._data[ch]
-                ax.scatter(I0, I1, s=ms, alpha=alpha)
+                ax.scatter(I0, I1, s=ms, alpha=alpha, label=None)
                 reg = LinearRegression().fit(I0.values.reshape(-1, 1), I1)
 
                 if ch in self._back_channels:
@@ -541,7 +541,7 @@ class XasDigitizer(XasProcessor):
         elif channel.upper() in self._channels:
             ch = channel.upper()
             I1 = self._data[ch]
-            axes[1][0].scatter(I0, I1, s=ms, alpha=alpha)
+            axes[1][0].scatter(I0, I1, s=ms, alpha=alpha, label=None)
             reg = LinearRegression().fit(I0.values.reshape(-1, 1), I1)
             
             if ch in self._back_channels:

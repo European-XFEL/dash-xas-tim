@@ -277,13 +277,12 @@ class XasProcessor(abc.ABC):
             energy bin range and columnsbeing: 
             - energy: central energy of each bin;
             - count: number of data points for each energy bin;
-            - muXGM, muMCP1, muMCP2, muMCP3, muMCP4: intensity mean;
-            - sigmaXGM, sigmaMCP1, sigmaMCP2, sigmaMCP3, sigmaMCP4: intensity standard 
+            - muXGM, muMCP1, muMCP2, muMCP3: intensity mean;
+            - sigmaXGM, sigmaMCP1, sigmaMCP2, sigmaMCP3: intensity standard 
                 deviations;
-            - muA1, muA2, muA3, muA4: absorption mean;
-            - sigmaA1, sigmaA2, sigmaA3, sigmaA4: absorption standard deviation;
-            - corrMCP1, corrMCP2, corrMCP3, corrMCP4: correlation between 
-                MCP and XGM.
+            - muA1, muA2, muA3: absorption mean;
+            - sigmaA1, sigmaA2, sigmaA3: absorption standard deviation;
+            - corrMCP1, corrMCP2, corrMCP3: correlation between MCP and XGM.
         """
         pass
 
@@ -313,6 +312,9 @@ class XasDigitizer(XasProcessor):
             'DIGITIZER': 'SCS_UTC1_ADQ/ADC/1',
             'DIGITIZER_OUTPUT': 'SCS_UTC1_ADQ/ADC/1:network'
         })
+
+        self._front_channels = ('MCP1', 'MCP2', 'MCP3')
+        self._back_channels = ('MCP4',)
         self._channels = {'MCP{}'.format(i): 
                           "digitizers.channel_1_{}.raw.samples".format(ch)
                           for i, ch in enumerate(channels, 1)}
@@ -418,11 +420,9 @@ class XasDigitizer(XasProcessor):
                 channel_id, n_pulses, config)
 
         # set condition for valid data: I0 > 0 and I1 < 0 
-        channels = list(self._channels.keys())
         condition = self._I0 > 0
-        # only apply to MCP1, MCP2 and MCP3
-        for i in range(3):
-            condition &= self._I1[channels[i]] < 0
+        for ch in self._front_channels:
+            condition &= self._I1[ch] < 0
 
         print("Removed {}/{} data with I0 <= 0 or I1 >= 0 (MCP1-3)".format(
             len(self._I0) - sum(condition), len(self._I0)))
@@ -452,7 +452,7 @@ class XasDigitizer(XasProcessor):
                      'muI1', 'sigmaI1', 'corr', 'count']
         )
 
-        for ch in self._channels:
+        for ch in self._front_channels:
             absorption.loc[ch] = compute_absorption(data['XGM'], data[ch])
 
         return absorption
@@ -461,12 +461,14 @@ class XasDigitizer(XasProcessor):
         """Override."""
         data = self.get_data()
 
+        # binning
         binned = data.groupby(pd.cut(data['energy'], bins=n_bins))
 
+        # mean
         binned_mean = binned.mean()
         binned_mean.columns = ['mu' + col if col != 'energy' else col
                                for col in binned_mean.columns]
-
+        # standard deviation
         binned_std = binned.std()
         binned_std.drop("energy", axis=1, inplace=True)
         binned_std.columns = ['sigma' + col for col in binned_std.columns]
@@ -480,7 +482,7 @@ class XasDigitizer(XasProcessor):
         spectrum['count'] = binned['energy'].count()
 
         # calculate absorption and its sigma for each bin
-        for i, ch in enumerate(self._channels, 1):
+        for i, ch in enumerate(self._front_channels, 1):
             spectrum['muA{}'.format(i)] = spectrum.apply(
                 lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']), 
                 axis=1)
@@ -516,45 +518,60 @@ class XasDigitizer(XasProcessor):
                 reg = LinearRegression().fit(self._I0.reshape(-1, 1),
                                              self._I1[ch])
 
-                ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
-                        c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".
-                        format(absorption.loc[ch, "muA"], 
-                               absorption.loc[ch, "sigmaA"]))
+                if ch in self._back_channels:
+                    label = None 
+                else:
+                    muA = absorption.loc[ch, "muA"]
+                    sigmaA = absorption.loc[ch, "sigmaA"]
+                    label = "Abs: {:.3g} +/- {:.3g}".format(muA, sigmaA)  
 
+                ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
+                        c='#FF8000', lw=2, label=label)
+                    
                 ax.set_xlabel("$I_0$")
                 ax.set_ylabel("$I_1$")
                 ax.set_title(ch)
-                ax.legend()
+                if ch not in self._back_channels:
+                    ax.legend()
 
             fig.tight_layout()
         elif channel.upper() in self._channels:
             ch = channel.upper()
             axes[1][0].scatter(self._I0, self._I1[ch], s=ms, alpha=alpha)
             reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[ch])
+            
+            if ch in self._back_channels:
+                label = None
+            else:
+                muA = absorption.loc[ch, "muA"]
+                sigmaA = absorption.loc[ch, "sigmaA"]
+                label = "Abs: {:.3g} +/- {:.3g}".format(muA, sigmaA)  
+
             axes[1][0].plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
-                c='#FF8000', lw=2, label="Abs: {:.3g} +/- {:.3g}".format(
-                    absorption.loc[ch, "muA"], 
-                    absorption.loc[ch, "sigmaA"]))
+                c='#FF8000', lw=2, label=label)
+
             axes[1][0].set_xlabel("$I_0$")
             axes[1][0].set_ylabel("$I_1$")
-            axes[1][0].legend()
+            if ch not in self._back_channels:
+                axes[1][0].legend()
 
             axes[0][0].hist(self._I0, bins=n_bins)
-            axes[0][0].axvline(absorption.loc[ch, 'muI0'], c='#6A0888', ls='--')
+            axes[0][0].axvline(self._I0.mean(), c='#6A0888', ls='--')
 
             axes[1][1].hist(self._I1[ch], bins=n_bins, orientation='horizontal')
-            axes[1][1].axhline(absorption.loc[ch, 'muI1'], c='#6A0888', ls='--')
+            axes[1][1].axhline(self._I1[ch].mean(), c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
                 absp = -np.log(abs(self._I1[ch]) / self._I0) 
             axes[0][1].scatter(self._I0, absp, s=ms, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")
-            axes[0][1].axhline(
-                absorption.loc[ch, 'muA'], c='#FF8000', ls='--',
-                label="SNR@labs: {:.3g}".format(1./absorption.loc[ch, 'sigmaA']),
-            )
-            axes[0][1].legend()
+            if ch not in self._back_channels:
+                axes[0][1].axhline(
+                    absorption.loc[ch, 'muA'], c='#FF8000', ls='--',
+                    label="SNR@labs: {:.3g}".format(1. / sigmaA),
+                )
+                axes[0][1].legend()
             
             fig.suptitle(ch)
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -583,28 +600,18 @@ class XasDigitizer(XasProcessor):
         fig, ax = plt.subplots(figsize=figsize)
 
         if channel is None:
-            if use_transmission:
-                y1 = spectrum.muMCP1
-                y1_err = spectrum.sigmaMCP1 / spectrum['count'].apply(np.sqrt)
-                y2 = spectrum.muMCP2
-                y2_err = spectrum.sigmaMCP2 / spectrum['count'].apply(np.sqrt)
-                y3 = spectrum.muMCP3
-                y3_err = spectrum.sigmaMCP3 / spectrum['count'].apply(np.sqrt)
-            else:
-                y1 = spectrum.muA1
-                y1_err = spectrum.sigmaA1 / spectrum['count'].apply(np.sqrt)
-                y2 = spectrum.muA2
-                y2_err = spectrum.sigmaA2 / spectrum['count'].apply(np.sqrt)
-                y3 = spectrum.muA3
-                y3_err = spectrum.sigmaA3 / spectrum['count'].apply(np.sqrt)
+            for i, ch in enumerate(self._front_channels, 1):
+                if use_transmission:
+                    y = spectrum['mu' + ch]
+                    y_err = spectrum['sigma' + ch] / spectrum['count'].apply(np.sqrt)
+                else:
+                    y = spectrum['muA' + str(i)]
+                    y_err = spectrum['sigmaA' + str(i)] / spectrum['count'].apply(np.sqrt)
 
-            ax.errorbar(spectrum.energy, y1, y1_err,
-                        capsize=capsize, fmt='.', label="MCP1")
-            ax.errorbar(spectrum.energy, y2, y2_err,
-                        capsize=capsize, fmt='.', label="MCP2")
-            ax.errorbar(spectrum.energy, y3, y3_err,
-                        capsize=capsize, fmt='.', label="MCP3")
-        elif channel.upper() in self._channels:
+                ax.errorbar(spectrum.energy, y, y_err,
+                            capsize=capsize, fmt='.', label=ch)
+
+        elif channel.upper() in self._front_channels:
             ch = channel.upper()
             idx = list(self._channels.keys()).index(ch) + 1
 
@@ -617,6 +624,8 @@ class XasDigitizer(XasProcessor):
 
             ax.errorbar(spectrum.energy, y, y_err,
                         fmt='.', capsize=capsize, label=ch)
+        else:
+            raise ValueError("Not understandable input!")
 
         ax.set_xlabel("Energy (eV)")
         if use_transmission:

@@ -256,7 +256,7 @@ class XasProcessor(abc.ABC):
     def compute_total_absorption(self):
         """Compute absorption for all data.
 
-        :return: total absorption dta in pandas.DataFrame with index being the 
+        :return: total absorption data in pandas.DataFrame with index being the 
             MCP channel name and columns being:
             - muA: absorption mean;
             - sigmaA: absorption standard deviation;

@@ -347,8 +347,10 @@ class XasDigitizer(XasProcessor):
         else:
             tid, data = self._run.train_from_id(train_id)
 
-        digitizer_raw_data = {key: data[self.sources['DIGITIZER_OUTPUT']][value] 
-                              for key, value in self._channels.items()}
+        digitizer_raw_data = {
+            key: data[self.sources['DIGITIZER_OUTPUT']][value]
+            for key, value in self._channels.items()
+        }
 
         n_channels = len(self._channels)
 
@@ -489,8 +491,11 @@ class XasDigitizer(XasProcessor):
                 lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']), 
                 axis=1)
             spectrum['sigmaA{}'.format(i)] = spectrum.apply(
-                lambda x: compute_sigma(x['muXGM'], x['sigmaXGM'], x['mu' + ch], 
-                                        x['sigma' + ch], x['corr' + ch]), axis=1) 
+                lambda x: compute_sigma(x['muXGM'],
+                                        x['sigmaXGM'],
+                                        x['mu' + ch],
+                                        x['sigma' + ch],
+                                        x['corr' + ch]), axis=1)
 
         return spectrum
 
@@ -562,7 +567,8 @@ class XasDigitizer(XasProcessor):
             axes[0][0].hist(I0, bins=n_bins)
             axes[0][0].axvline(I0.mean(), c='#6A0888', ls='--')
 
-            axes[1][1].hist(self._I1[ch], bins=n_bins, orientation='horizontal')
+            axes[1][1].hist(self._I1[ch],
+                            bins=n_bins, orientation='horizontal')
             axes[1][1].axhline(I1.mean(), c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
@@ -607,10 +613,12 @@ class XasDigitizer(XasProcessor):
             for i, ch in enumerate(self._front_channels, 1):
                 if use_transmission:
                     y = spectrum['mu' + ch]
-                    y_err = spectrum['sigma' + ch] / spectrum['count'].apply(np.sqrt)
+                    y_err = spectrum['sigma' + ch] / \
+                            spectrum['count'].apply(np.sqrt)
                 else:
                     y = spectrum['muA' + str(i)]
-                    y_err = spectrum['sigmaA' + str(i)] / spectrum['count'].apply(np.sqrt)
+                    y_err = spectrum['sigmaA' + str(i)] / \
+                            spectrum['count'].apply(np.sqrt)
 
                 ax.errorbar(spectrum.energy, y, y_err,
                             capsize=capsize, fmt='.', label=ch)
@@ -621,10 +629,12 @@ class XasDigitizer(XasProcessor):
 
             if use_transmission:
                 y = spectrum['mu' + ch]
-                y_err = spectrum['sigma' + ch] / spectrum['count'].apply(np.sqrt)
+                y_err = spectrum['sigma' + ch] / \
+                        spectrum['count'].apply(np.sqrt)
             else:
                 y = spectrum['muA{}'.format(idx)]
-                y_err = spectrum['sigmaA{}'.format(idx)] / spectrum['count'].apply(np.sqrt)
+                y_err = spectrum['sigmaA{}'.format(idx)] / \
+                        spectrum['count'].apply(np.sqrt)
 
             ax.errorbar(spectrum.energy, y, y_err,
                         fmt='.', capsize=capsize, label=ch)

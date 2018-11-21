@@ -134,6 +134,8 @@ class XasProcessor(abc.ABC):
         self._I0 = None 
         self._I1 = OrderedDict()
 
+        self._data = None  # pulse-resolved data in DataFrame
+
     def info(self):
         """Print out information of the run(s)."""
         first_train = self._run.train_ids[0]
@@ -237,13 +239,14 @@ class XasProcessor(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
-    def get_data(self):
+    @property
+    def data(self):
         """Get the pulse-resolved data in pandas.DataFrame.
 
-        :return pandas.DataFrame: pulse resolved data in pandas.DataFrame.
+        The data is not filtered! The signs of signals in MCP channels 
+        are flipped.
         """
-        pass            
+        return self._data            
 
     @property
     def absorption(self):
@@ -416,36 +419,33 @@ class XasDigitizer(XasProcessor):
 
         for channel, channel_id in self._channels.items():
             # self._I1 is a list of numpy.ndarray
-            self._I1[channel] = self._integrate_channel(
+            # Note: the sign of I1 is reversed here!!!
+            self._I1[channel] = -self._integrate_channel(
                 channel_id, n_pulses, config)
 
-        # set condition for valid data: I0 > 0 and I1 < 0 
-        condition = self._I0 > 0
-        for ch in self._front_channels:
-            condition &= self._I1[ch] < 0
-
-        print("Removed {}/{} data with I0 <= 0 or I1 >= 0 (MCP1-3)".format(
-            len(self._I0) - sum(condition), len(self._I0)))
-
-        # apply condition to all the useful pulse resolved data here
-        self._I0 = self._I0[condition]
-        self._photon_energies = np.repeat(self._mono_df['actualEnergy'], 
-                                          n_pulses)[condition]
-
-        for channel in self._channels:
-            # Note: the sign of I1 is reversed here!!!
-            self._I1[channel] = -self._I1[channel][condition]
-
-    def get_data(self):
-        """Override."""
+        self._photon_energies = np.repeat(
+            self._mono_df['actualEnergy'], n_pulses)
+        
         data = {'energy': self._photon_energies, "XGM": self._I0}
         data.update({ch: self._I1[ch] for ch in self._channels})
             
-        return pd.DataFrame(data)
+        self._data = pd.DataFrame(data)
+
+    def _filter_data(self):
+        """Filter pulse resolved data."""
+        # set condition for valid data: I0 > 0 and I1 > 0 
+        condition = self._data['XGM'] > 0
+        for ch in self._front_channels:
+            condition &= self._data[ch] > 0
+
+        print("Removed {}/{} data with I0 <= 0 or I1 <= 0 (MCP1-3)".format(
+              len(self._data) - sum(condition), len(self._data)))
+
+        return self._data.loc[condition]
 
     def compute_total_absorption(self):
         """Override."""
-        data = self.get_data()
+        filtered_data = self._filter_data()
 
         absorption = pd.DataFrame(
             columns=['muA', 'sigmaA', 'muI0', 'sigmaI0', 'weight', 
@@ -453,16 +453,18 @@ class XasDigitizer(XasProcessor):
         )
 
         for ch in self._front_channels:
-            absorption.loc[ch] = compute_absorption(data['XGM'], data[ch])
+            absorption.loc[ch] = compute_absorption(
+                filtered_data['XGM'], filtered_data[ch])
 
         return absorption
 
     def compute_spectrum(self, n_bins=20):
         """Override."""
-        data = self.get_data()
+        filtered_data = self._filter_data()
 
         # binning
-        binned = data.groupby(pd.cut(data['energy'], bins=n_bins))
+        binned = filtered_data.groupby(
+            pd.cut(filtered_data['energy'], bins=n_bins))
 
         # mean
         binned_mean = binned.mean()
@@ -512,11 +514,12 @@ class XasDigitizer(XasProcessor):
 
         fig, axes = plt.subplots(2, 2, figsize=figsize)
 
+        I0 = self._data['XGM']
         if channel is None:
             for ax, ch in zip(axes.flatten(), self._channels):
-                ax.scatter(self._I0, self._I1[ch], s=ms, alpha=alpha)
-                reg = LinearRegression().fit(self._I0.reshape(-1, 1),
-                                             self._I1[ch])
+                I1 = self._data[ch]
+                ax.scatter(I0, I1, s=ms, alpha=alpha)
+                reg = LinearRegression().fit(I0.values.reshape(-1, 1), I1)
 
                 if ch in self._back_channels:
                     label = None 
@@ -525,7 +528,7 @@ class XasDigitizer(XasProcessor):
                     sigmaA = absorption.loc[ch, "sigmaA"]
                     label = "Abs: {:.3g} +/- {:.3g}".format(muA, sigmaA)  
 
-                ax.plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
+                ax.plot(I0, reg.predict(I0.values.reshape(-1, 1)), 
                         c='#FF8000', lw=2, label=label)
                     
                 ax.set_xlabel("$I_0$")
@@ -537,8 +540,9 @@ class XasDigitizer(XasProcessor):
             fig.tight_layout()
         elif channel.upper() in self._channels:
             ch = channel.upper()
-            axes[1][0].scatter(self._I0, self._I1[ch], s=ms, alpha=alpha)
-            reg = LinearRegression().fit(self._I0.reshape(-1, 1), self._I1[ch])
+            I1 = self._data[ch]
+            axes[1][0].scatter(I0, I1, s=ms, alpha=alpha)
+            reg = LinearRegression().fit(I0.values.reshape(-1, 1), I1)
             
             if ch in self._back_channels:
                 label = None
@@ -547,7 +551,7 @@ class XasDigitizer(XasProcessor):
                 sigmaA = absorption.loc[ch, "sigmaA"]
                 label = "Abs: {:.3g} +/- {:.3g}".format(muA, sigmaA)  
 
-            axes[1][0].plot(self._I0, reg.predict(self._I0.reshape(-1, 1)), 
+            axes[1][0].plot(I0, reg.predict(I0.values.reshape(-1, 1)), 
                 c='#FF8000', lw=2, label=label)
 
             axes[1][0].set_xlabel("$I_0$")
@@ -555,15 +559,15 @@ class XasDigitizer(XasProcessor):
             if ch not in self._back_channels:
                 axes[1][0].legend()
 
-            axes[0][0].hist(self._I0, bins=n_bins)
-            axes[0][0].axvline(self._I0.mean(), c='#6A0888', ls='--')
+            axes[0][0].hist(I0, bins=n_bins)
+            axes[0][0].axvline(I0.mean(), c='#6A0888', ls='--')
 
             axes[1][1].hist(self._I1[ch], bins=n_bins, orientation='horizontal')
-            axes[1][1].axhline(self._I1[ch].mean(), c='#6A0888', ls='--')
+            axes[1][1].axhline(I1.mean(), c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
-                absp = -np.log(abs(self._I1[ch]) / self._I0) 
-            axes[0][1].scatter(self._I0, absp, s=ms, alpha=alpha)
+                absp = -np.log(abs(I1) / I0) 
+            axes[0][1].scatter(I0, absp, s=ms, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")
             if ch not in self._back_channels:

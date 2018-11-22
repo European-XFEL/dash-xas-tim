@@ -23,11 +23,12 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     
     :param xarray trace: trace for all the trains. shape = (trains, samples)
     :param int n_peaks: number of expected peaks.
-    :param peak_start: start position of the first peak.
-    :param peak_width: width of a peak.
-    :param background_end: end position of the background for the first peak.
-    :param background_width: width of a background.
-    :param peak_interval: gap between peaks.
+    :param int peak_start: start position of the first peak.
+    :param int peak_width: width of a peak.
+    :param int background_end: end position of the background for the 
+        first peak.
+    :param int background_width: width of a background.
+    :param int peak_interval: gap between peaks.
 
     :return list peaks: a list of peak data in 1D numpy.ndarray.
     :return list backgrounds: a list of background data in 1D numpy.ndarray.
@@ -38,9 +39,7 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     bkg0 = background_end - background_width
     for i in range(n_peaks):
         peaks.append(trace[:, peak0:peak0 + peak_width])
-        backgrounds.append(
-            trace[:, bkg0:bkg0 + background_width].median(axis=-1)
-        )
+        backgrounds.append(trace[:, bkg0:bkg0 + background_width])
         peak0 += peak_interval
         bkg0 += background_width
 
@@ -405,7 +404,7 @@ class XasDigitizer(XasProcessor):
 
         ret = []
         for peak, background in zip(peaks, backgrounds):
-            ret.append(np.trapz(peak, axis=-1) - background)
+            ret.append(np.trapz(peak, axis=-1) - background.median(axis=-1))
 
         return np.ravel(ret, order="F") 
 

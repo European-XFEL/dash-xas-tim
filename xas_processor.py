@@ -12,6 +12,7 @@ import datetime
 
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LinearRegression
 
 from karabo_data import RunDirectory
 
@@ -513,7 +514,6 @@ class XasDigitizer(XasProcessor):
         :param int n_bins: number of bins for the histogram plots.
         """
         import matplotlib.pyplot as plt
-        from sklearn.linear_model import LinearRegression
         
         absorption = self.compute_total_absorption()
 

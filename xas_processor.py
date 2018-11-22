@@ -249,10 +249,6 @@ class XasProcessor(abc.ABC):
         """
         return self._data            
 
-    @property
-    def absorption(self):
-        return self._absorption
-
     @abc.abstractmethod
     def compute_total_absorption(self):
         """Compute absorption for all data.

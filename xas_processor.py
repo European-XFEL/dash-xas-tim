@@ -99,7 +99,7 @@ def compute_absorption(I0, I1):
     return muA, sigmaA, muI0, sigmaI0, weight, muI1, sigmaI1, corr, count
 
 
-class XasProcessor(abc.ABC):
+class XasAnalyzer(abc.ABC):
     """Abstract class for Xray Absoprtion Spectroscopy analysis."""
     sources = {
         'MONO': 'SA3_XTD10_MONO/MDL/PHOTON_ENERGY',
@@ -281,15 +281,11 @@ class XasProcessor(abc.ABC):
         pass
 
 
-class XasFastCCD(XasProcessor):
+class XasFastCCD(XasAnalyzer):
     pass
 
 
-class XasFastADC(XasProcessor):
-    pass
-
-
-class XasDigitizer(XasProcessor):
+class XasTim(XasAnalyzer):
     def __init__(self, *args, channels=('D', 'C', 'B', 'A'), 
                  pulse_separation=880e-9, interleaved_mode=False, **kwargs):
         """Initialization.

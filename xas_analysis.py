@@ -169,6 +169,7 @@ class XasAnalyzer(abc.ABC):
         :param tuple figsize: figure size.
         """
         import matplotlib.pyplot as plt
+        plt.rcParams['font.size'] = 12
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
         ax1_tw = ax1.twinx()
@@ -232,6 +233,11 @@ class XasAnalyzer(abc.ABC):
     @abc.abstractmethod
     def process(self, pulse_id0, n_pulses, **kwargs):
         """Process the run data."""
+        pass
+
+    @abc.abstractmethod
+    def mask(self):
+        """Apply filter to pulse-resolved data."""
         pass
 
     @property
@@ -344,6 +350,7 @@ class XasTim(XasAnalyzer):
         n_channels = len(self._channels)
 
         import matplotlib.pyplot as plt
+        plt.rcParams['font.size'] = 12
 
         fig, axes = plt.subplots(n_channels, 1, figsize=figsize)
 
@@ -422,8 +429,10 @@ class XasTim(XasAnalyzer):
             
         self._data = pd.DataFrame(data)
 
-    def _filter_data(self):
-        """Filter pulse resolved data."""
+        return self
+
+    def mask(self):
+        """Override"""
         # set condition for valid data: I0 > 0 and I1 > 0 
         condition = self._data['XGM'] > 0
         for ch in self._front_channels:
@@ -436,7 +445,7 @@ class XasTim(XasAnalyzer):
 
     def compute_total_absorption(self):
         """Override."""
-        filtered_data = self._filter_data()
+        filtered_data = self.mask()
 
         absorption = pd.DataFrame(
             columns=['muA', 'sigmaA', 'muI0', 'sigmaI0', 'weight', 
@@ -451,7 +460,7 @@ class XasTim(XasAnalyzer):
 
     def compute_spectrum(self, n_bins=20):
         """Override."""
-        filtered_data = self._filter_data()
+        filtered_data = self.mask()
 
         # binning
         binned = filtered_data.groupby(
@@ -502,6 +511,7 @@ class XasTim(XasAnalyzer):
         :param int n_bins: number of bins for the histogram plots.
         """
         import matplotlib.pyplot as plt
+        plt.rcParams['font.size'] = 12
         
         absorption = self.compute_total_absorption()
 
@@ -592,6 +602,7 @@ class XasTim(XasAnalyzer):
             absorption, while True for plotting energy vs. I1. Default = False
         """
         import matplotlib.pyplot as plt
+        plt.rcParams['font.size'] = 12
 
         spectrum = self.compute_spectrum(n_bins=n_bins)
 

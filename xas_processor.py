@@ -153,8 +153,8 @@ class XasProcessor(abc.ABC):
         print('Max photon energy:    ', round(photon_energies.max(), 4), 'eV')
 
         print('MCP channels:')
-        for ch, channel_id in self._channels.items():
-            print('    - {}: {}'.format(ch, channel_id))
+        for ch, value in self._channels.items():
+            print('    - {}: {}'.format(ch, value['raw']))
 
     def _check_sources(self):
         """Check all the required sources are in the data."""
@@ -230,13 +230,8 @@ class XasProcessor(abc.ABC):
         return fig, (ax1, ax2)
 
     @abc.abstractmethod
-    def process(self, pulse_id0, n_pulses, *, config=None):
-        """Process the run data.
-        
-        :param int pulse_id0: first pulse ID.
-        :param int n_pulses: number of pulses in a train.
-        :param dict config: configuration for integrating of digitizer signal.
-        """
+    def process(self, pulse_id0, n_pulses, **kwargs):
+        """Process the run data."""
         pass
 
     @property
@@ -314,8 +309,10 @@ class XasDigitizer(XasProcessor):
 
         self._front_channels = ('MCP1', 'MCP2', 'MCP3')
         self._back_channels = ('MCP4',)
+
         self._channels = {'MCP{}'.format(i): 
-                          "digitizers.channel_1_{}.raw.samples".format(ch)
+                          {'raw': "digitizers.channel_1_{}.raw.samples".format(ch),
+                           'apd': "digitizers.channel_1_{}.apd.pulseIntegral".format(ch)}
                           for i, ch in enumerate(channels, 1)}
 
         self._check_sources()
@@ -344,8 +341,8 @@ class XasDigitizer(XasProcessor):
             tid, data = self._run.train_from_id(train_id)
 
         digitizer_raw_data = {
-            key: data[self.sources['DIGITIZER_OUTPUT']][value]
-            for key, value in self._channels.items()
+            ch: data[self.sources['DIGITIZER_OUTPUT']][value['raw']]
+            for ch, value in self._channels.items()
         }
 
         n_channels = len(self._channels)
@@ -366,22 +363,11 @@ class XasDigitizer(XasProcessor):
 
         return fig, axes
 
-    def _integrate_channel(self, channel_id, n_pulses, config):
+    def _integrate_channel(self, channel_id, n_pulses, *args): 
         """Integration of a FastAdc channel for all trains in a run.
  
         :param str channel_id: full name of the output channel.
         :param int n_pulses: number of pulses in a train.
-        :param dict config: configuration for integrating of digitizer signal.
-            If None, use automatic peak finding. If not, the following keys
-            are mandantory:
-            - peak_start: int
-                Sample index at the start of the first peak.
-            - peak_width: int
-                Peak width.
-            - background_end: int
-                Sample index at the end of the background for the first peak.
-            - background_width: int
-                Background width.
 
         :return numpy.ndarray: 1D array holding integration result for
             each train.
@@ -389,18 +375,7 @@ class XasDigitizer(XasProcessor):
         trace  = self._run.get_array(self.sources['DIGITIZER_OUTPUT'],
                                      channel_id)
 
-        if config is None:
-            cfg = {"auto": True}
-        else:
-            cfg = {"auto": False}
-            cfg.update(config)
-
-        peaks, backgrounds = find_peaks(trace, n_pulses, 
-                                        cfg['peak_start'], 
-                                        cfg['peak_width'], 
-                                        cfg['background_end'], 
-                                        cfg['background_width'], 
-                                        int(self._peak_interval))
+        peaks, backgrounds = find_peaks(trace, n_pulses, *args)
 
         ret = []
         for peak, background in zip(peaks, backgrounds):
@@ -408,18 +383,40 @@ class XasDigitizer(XasProcessor):
 
         return np.ravel(ret, order="F") 
 
-    def process(self, pulse_id0, n_pulses, *, config=None):
-        """Override."""
+    def process(self, pulse_id0, n_pulses, *, use_apd=True, 
+                peak_start=None, peak_width=None, 
+                background_end=None, background_width=None):
+        """Override.
+        
+        :param int pulse_id0: first pulse ID.
+        :param int n_pulses: number of pulses in a train.
+        :param bool use_apd: use the integration calculated from the 
+            hardware.
+        :param int peak_start: start position of the first peak. Ignored if
+            use_apd == True.
+        :param int peak_width: width of a peak. Ignored if use_apd == True.
+        :param int background_end: end position of the background for the 
+            first peak. Ignored if use_apd == True.
+        :param int background_width: width of a background. Ignored if 
+            use_apd == True.
+        """
         # self._I0 is a numpy.ndarray
         self._I0 = self._run.get_array(
             self.sources['XGM_OUTPUT'], 'data.intensityTD').values[...,
                 pulse_id0:pulse_id0 + n_pulses].flatten()
 
-        for channel, channel_id in self._channels.items():
-            # self._I1 is a list of numpy.ndarray
-            # Note: the sign of I1 is reversed here!!!
-            self._I1[channel] = -self._integrate_channel(
-                channel_id, n_pulses, config)
+        for ch, value in self._channels.items():
+            if use_apd:
+                integrals = self._run.get_array(
+                    self.sources['DIGITIZER_OUTPUT'], value['apd']).values[
+                        ..., :n_pulses]
+                self._I1[ch] = -np.ravel(integrals)
+            else:
+                # self._I1[ch] is a list of numpy.ndarray
+                # Note: the sign of I1 is reversed here!!!
+                self._I1[ch] = -self._integrate_channel(
+                    value['raw'], n_pulses, peak_start, peak_width, 
+                    background_end, background_width, int(self._peak_interval))
 
         self._photon_energies = np.repeat(
             self._mono_df['actualEnergy'], n_pulses)

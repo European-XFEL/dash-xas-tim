@@ -268,10 +268,13 @@ class XasAnalyzer(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def compute_spectrum(self, n_bins=20):
+    def compute_spectrum(self, n_bins=20, point_wise=False):
         """Compute spectrum.
         
         :param int n_bins: number of energy bins.
+        :param bool point_wise: if True, calculate the absorption point wise 
+            and then average. Otherwise, average over I0 and I1 first and 
+            then calculate the absorption. Default = False
 
         :return: spectrum data in pandas.DataFrame with index being the 
             energy bin range and columnsbeing: 
@@ -458,7 +461,7 @@ class XasTim(XasAnalyzer):
 
         return absorption
 
-    def compute_spectrum(self, n_bins=20):
+    def compute_spectrum(self, n_bins=20, point_wise=False):
         """Override."""
         filtered_data = self.mask()
 
@@ -466,34 +469,38 @@ class XasTim(XasAnalyzer):
         binned = filtered_data.groupby(
             pd.cut(filtered_data['energy'], bins=n_bins))
 
-        # mean
-        binned_mean = binned.mean()
-        binned_mean.columns = ['mu' + col if col != 'energy' else col
-                               for col in binned_mean.columns]
-        # standard deviation
-        binned_std = binned.std()
-        binned_std.drop("energy", axis=1, inplace=True)
-        binned_std.columns = ['sigma' + col for col in binned_std.columns]
+        if not point_wise:
+            # mean
+            binned_mean = binned.mean()
+            binned_mean.columns = ['mu' + col if col != 'energy' else col
+                                   for col in binned_mean.columns]
+            # standard deviation
+            binned_std = binned.std()
+            binned_std.drop("energy", axis=1, inplace=True)
+            binned_std.columns = ['sigma' + col for col in binned_std.columns]
 
-        # correlation
-        binned_corr = binned.corr().loc[pd.IndexSlice[:, 'XGM'], :].drop(
-            columns=['XGM', 'energy'], axis=1).reset_index(level=1, drop=True)
-        binned_corr.columns = ['corr' + col for col in binned_corr.columns]
+            # correlation
+            binned_corr = binned.corr().loc[pd.IndexSlice[:, 'XGM'], :].drop(
+                columns=['XGM', 'energy'], axis=1).reset_index(level=1, drop=True)
+            binned_corr.columns = ['corr' + col for col in binned_corr.columns]
 
-        spectrum = pd.concat([binned_mean, binned_std, binned_corr], axis=1) 
-        spectrum['count'] = binned['energy'].count()
+            spectrum = pd.concat([binned_mean, binned_std, binned_corr], axis=1) 
+            spectrum['count'] = binned['energy'].count()
 
-        # calculate absorption and its sigma for each bin
-        for i, ch in enumerate(self._front_channels, 1):
-            spectrum['muA{}'.format(i)] = spectrum.apply(
-                lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']), 
-                axis=1)
-            spectrum['sigmaA{}'.format(i)] = spectrum.apply(
-                lambda x: compute_sigma(x['muXGM'],
-                                        x['sigmaXGM'],
-                                        x['mu' + ch],
-                                        x['sigma' + ch],
-                                        x['corr' + ch]), axis=1)
+            # calculate absorption and its sigma for each bin
+            for i, ch in enumerate(self._front_channels, 1):
+                spectrum['muA{}'.format(i)] = spectrum.apply(
+                    lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']), 
+                    axis=1)
+                spectrum['sigmaA{}'.format(i)] = spectrum.apply(
+                    lambda x: compute_sigma(x['muXGM'],
+                                            x['sigmaXGM'],
+                                            x['mu' + ch],
+                                            x['sigma' + ch],
+                                            x['corr' + ch]), axis=1)
+        else:
+            # TODO: implement
+            pass
 
         return spectrum
 

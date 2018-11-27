@@ -238,7 +238,7 @@ class XasAnalyzer(abc.ABC):
     def select(self, keys, lower=-np.inf, upper=np.inf):
         """Select data within the given boundaries.
         
-        :param str/list/tuple/numpy.ndarray: key(s).
+        :param str/list/tuple/numpy.ndarray: key(s) for applying the filter.
         :param float lower: lower boundary (included).
         :param float upper: higher boundary (included).
         """
@@ -246,9 +246,11 @@ class XasAnalyzer(abc.ABC):
         if isinstance(keys, (list, tuple, np.ndarray)):
             # TODO: remove this for loop
             for key in keys:
-                self._data.query("{} <= {} <= {}".format(lower, key, upper), inplace=True)
+                self._data.query("{} <= {} <= {}".format(lower, key, upper),
+                                 inplace=True)
         else:
-            self._data.query("{} <= {} <= {}".format(lower, keys, upper), inplace=True)
+            self._data.query("{} <= {} <= {}".format(lower, keys, upper),
+                             inplace=True)
 
         print("{} out of {} data are selected!".format(len(self._data), n0))
         return self
@@ -328,10 +330,11 @@ class XasTim(XasAnalyzer):
         self._front_channels = ('MCP1', 'MCP2', 'MCP3')
         self._back_channels = ('MCP4',)
 
-        self._channels = {'MCP{}'.format(i): 
-                          {'raw': "digitizers.channel_1_{}.raw.samples".format(ch),
-                           'apd': "digitizers.channel_1_{}.apd.pulseIntegral".format(ch)}
-                          for i, ch in enumerate(channels, 1)}
+        self._channels = {
+            'MCP{}'.format(i):
+            {'raw': "digitizers.channel_1_{}.raw.samples".format(ch),
+             'apd': "digitizers.channel_1_{}.apd.pulseIntegral".format(ch)}
+              for i, ch in enumerate(channels, 1)}
 
         self._check_sources()
 
@@ -402,7 +405,7 @@ class XasTim(XasAnalyzer):
 
         return np.ravel(ret, order="F") 
 
-    def process(self, pulse_id0, n_pulses, *, use_apd=True, 
+    def process(self, pulse_id0, n_pulses, *, use_apd=True,
                 peak_start=None, peak_width=None, 
                 background_end=None, background_width=None):
         """Override.
@@ -477,10 +480,12 @@ class XasTim(XasAnalyzer):
 
             # correlation
             binned_corr = binned.corr().loc[pd.IndexSlice[:, 'XGM'], :].drop(
-                columns=['XGM', 'energy'], axis=1).reset_index(level=1, drop=True)
+                columns=['XGM', 'energy'], axis=1).reset_index(
+                level=1, drop=True)
             binned_corr.columns = ['corr' + col for col in binned_corr.columns]
 
-            spectrum = pd.concat([binned_mean, binned_std, binned_corr], axis=1) 
+            spectrum = pd.concat(
+                [binned_mean, binned_std, binned_corr], axis=1)
             spectrum['count'] = binned['energy'].count()
 
             # calculate absorption and its sigma for each bin
@@ -602,7 +607,8 @@ class XasTim(XasAnalyzer):
         :param int capsize: cap size for the error bar.
         :param int n_bins: number of energy bins.
         :param bool use_transmission: False for plotting energy vs. 
-            absorption, while True for plotting energy vs. I1. Default = False
+            absorption, while True for plotting energy vs. I1.
+            Default = False.
         """
         import matplotlib.pyplot as plt
         plt.rcParams['font.size'] = 12
@@ -654,4 +660,3 @@ class XasTim(XasAnalyzer):
         fig.tight_layout()
 
         return fig, ax
-

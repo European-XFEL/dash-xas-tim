@@ -231,7 +231,7 @@ class XasAnalyzer(abc.ABC):
         return fig, (ax1, ax2)
 
     @abc.abstractmethod
-    def process(self, pulse_id0, n_pulses, **kwargs):
+    def process(self):
         """Process the run data."""
         pass
 
@@ -405,13 +405,13 @@ class XasTim(XasAnalyzer):
 
         return np.ravel(ret, order="F") 
 
-    def process(self, pulse_id0, n_pulses, *, use_apd=True,
+    def process(self, n_pulses, pulse_id0=0, *, use_apd=True,
                 peak_start=None, peak_width=None, 
                 background_end=None, background_width=None):
         """Override.
         
-        :param int pulse_id0: first pulse ID.
         :param int n_pulses: number of pulses in a train.
+        :param int pulse_id0: first pulse ID. Default = 0.
         :param bool use_apd: use the integration calculated from the 
             hardware.
         :param int peak_start: start position of the first peak. Ignored if

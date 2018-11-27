@@ -235,10 +235,23 @@ class XasAnalyzer(abc.ABC):
         """Process the run data."""
         pass
 
-    @abc.abstractmethod
-    def mask(self):
-        """Apply filter to pulse-resolved data."""
-        pass
+    def select(self, keys, lower=-np.inf, upper=np.inf):
+        """Select data within the given boundaries.
+        
+        :param str/list/tuple/numpy.ndarray: key(s).
+        :param float lower: lower boundary (included).
+        :param float upper: higher boundary (included).
+        """
+        n0 = len(self._data)
+        if isinstance(keys, (list, tuple, np.ndarray)):
+            # TODO: remove this for loop
+            for key in keys:
+                self._data.query("{} <= {} <= {}".format(lower, key, upper), inplace=True)
+        else:
+            self._data.query("{} <= {} <= {}".format(lower, keys, upper), inplace=True)
+
+        print("{} out of {} data are selected!".format(len(self._data), n0))
+        return self
 
     @property
     def data(self):
@@ -434,22 +447,8 @@ class XasTim(XasAnalyzer):
 
         return self
 
-    def mask(self):
-        """Override"""
-        # set condition for valid data: I0 > 0 and I1 > 0 
-        condition = self._data['XGM'] > 0
-        for ch in self._front_channels:
-            condition &= self._data[ch] > 0
-
-        print("Removed {}/{} data with I0 <= 0 or I1 <= 0 (MCP1-3)".format(
-              len(self._data) - sum(condition), len(self._data)))
-
-        return self._data.loc[condition]
-
     def compute_total_absorption(self):
         """Override."""
-        filtered_data = self.mask()
-
         absorption = pd.DataFrame(
             columns=['muA', 'sigmaA', 'muI0', 'sigmaI0', 'weight', 
                      'muI1', 'sigmaI1', 'corr', 'count']
@@ -457,17 +456,14 @@ class XasTim(XasAnalyzer):
 
         for ch in self._front_channels:
             absorption.loc[ch] = compute_absorption(
-                filtered_data['XGM'], filtered_data[ch])
+                self._data['XGM'], self._data[ch])
 
         return absorption
 
     def compute_spectrum(self, n_bins=20, point_wise=False):
         """Override."""
-        filtered_data = self.mask()
-
         # binning
-        binned = filtered_data.groupby(
-            pd.cut(filtered_data['energy'], bins=n_bins))
+        binned = self._data.groupby(pd.cut(self._data['energy'], bins=n_bins))
 
         if not point_wise:
             # mean

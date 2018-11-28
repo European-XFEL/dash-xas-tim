@@ -185,8 +185,8 @@ class XasAnalyzer(abc.ABC):
         ln2 = ax1_tw.plot(number_of_bunches, label="Number of pulses", c='g')
 
         lns = ln1 + ln2
-        lables = [l.get_label() for l in lns]
-        ax1.legend(lns, lables)
+        labels = [l.get_label() for l in lns]
+        ax1.legend(lns, labels)
         ax1.set_ylabel(r"Pulse energy ($\mu$J)")
         ax1_tw.set_ylabel("Number of pulses")
         if number_of_bunches.max() - number_of_bunches.min() < 5:

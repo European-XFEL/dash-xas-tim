@@ -307,10 +307,6 @@ class XasAnalyzer(abc.ABC):
         pass
 
 
-class XasFastCCD(XasAnalyzer):
-    pass
-
-
 class XasTim(XasAnalyzer):
     def __init__(self, *args, channels=('D', 'C', 'B', 'A'), 
                  pulse_separation=880e-9, interleaved_mode=False, **kwargs):

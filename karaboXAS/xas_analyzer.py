@@ -178,6 +178,9 @@ class XasAnalyzer(abc.ABC):
 
         ln1 = ax1.plot(self._xgm_df['pulseEnergy.photonFlux'],
                        label=r"Pulse energy ($\mu$J)")
+        # "nummberOfBrunches" is indeed the name in the Karabo Device
+        # implementation. For more details, please check
+        # https://git.xfel.eu/gitlab/karaboDevices/xgmDoocs
         number_of_bunches = self._xgm_df['pulseEnergy.nummberOfBrunches']
         ln2 = ax1_tw.plot(number_of_bunches, label="Number of pulses", c='g')
 

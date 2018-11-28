@@ -264,8 +264,10 @@ class XasAnalyzer(abc.ABC):
     def data(self):
         """Get the pulse-resolved data in pandas.DataFrame.
 
-        The data is not filtered! The signs of signals in MCP channels 
-        are flipped.
+        :return pandas.DataFrame with index being the Train ID and
+            columns being:
+            - I0/I1s (names differ in concrete classes): intensity;
+            - energy: photon energy.
         """
         return self._data            
 
@@ -273,8 +275,8 @@ class XasAnalyzer(abc.ABC):
     def compute_total_absorption(self):
         """Compute absorption for all data.
 
-        :return: total absorption data in pandas.DataFrame with index being the 
-            MCP channel name and columns being:
+        :return: total absorption data in pandas.DataFrame with index being
+            the MCP channel name and columns being:
             - muA: absorption mean;
             - sigmaA: absorption standard deviation;
             - muI0: I0 mean;

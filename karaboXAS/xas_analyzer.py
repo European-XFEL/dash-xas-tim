@@ -41,7 +41,7 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
         peaks.append(trace[:, peak0:peak0 + peak_width])
         backgrounds.append(trace[:, bkg0:bkg0 + background_width])
         peak0 += peak_interval
-        bkg0 += background_width
+        bkg0 += peak_interval
 
     return peaks, backgrounds 
 

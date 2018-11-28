@@ -104,7 +104,6 @@ def compute_absorption(I0, I1):
 class XasAnalyzer(abc.ABC):
     """Abstract class for Xray Absoprtion Spectroscopy analysis."""
 
-
     def __init__(self, run_folder):
         """Initialization.
         
@@ -505,8 +504,7 @@ class XasTim(XasAnalyzer):
                                             x['sigma' + ch],
                                             x['corr' + ch]), axis=1)
         else:
-            # TODO: implement
-            pass
+            raise NotImplementedError
 
         return spectrum
 

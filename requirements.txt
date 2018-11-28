@@ -1,2 +1,0 @@
-scikit-learn>=0.19.1
-karabo_data>=0.2.0

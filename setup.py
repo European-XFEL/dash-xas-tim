@@ -1,10 +1,6 @@
 from setuptools import setup, find_packages
 
 
-REQUIREMENTS = open('requirements.txt', encoding='utf-8').readlines()
-REQUIREMENTS = [req.rstrip() for req in REQUIREMENTS]
-
-
 setup(
     name='karaboXAS',
     version="0.1.0",
@@ -22,7 +18,10 @@ setup(
         ],
     },
     package_data={},
-    install_requires=REQUIREMENTS,
+    install_requires=[
+        'scikit-learn>=0.19.1',
+        'karabo_data>=0.2.0'
+    ],
     python_requires='>=3.6',
     classifiers=[
         'Development Status :: 3 - Alpha',

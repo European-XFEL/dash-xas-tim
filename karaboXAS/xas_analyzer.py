@@ -66,7 +66,9 @@ def compute_sigma(mu1, sigma1, mu2, sigma2, corr):
 
 def compute_absorption(I0, I1):
     """Compute absorption.
-    
+
+    A = -log(I1/I0)
+
     :param numpy.ndarray I0: incident beam intensity, 1D.
     :param numpy.ndarray I1: transmitted beam intensity, 1D.
 

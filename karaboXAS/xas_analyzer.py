@@ -212,17 +212,17 @@ class XasAnalyzer(abc.ABC):
         """
         import matplotlib.pyplot as plt
 
+        key = "data.intensityTD"
+        filtered = self._run.select("*XGM/*", key)
         if train_id is None:
-            tid, data = self._run.train_from_index(index)
+            tid, data = filtered.train_from_index(index)
         else:
-            tid, data = self._run.train_from_id(train_id)
+            tid, data = filtered.train_from_id(train_id)
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
 
-        ax1.plot(data[self.sources['SA3_XGM_OUTPUT']]['data.intensityTD'],
-                 marker='.')
-        ax2.plot(data[self.sources['XGM_OUTPUT']]['data.intensityTD'],
-                 marker='.')
+        ax1.plot(data[self.sources['SA3_XGM_OUTPUT']][key], marker='.')
+        ax2.plot(data[self.sources['XGM_OUTPUT']][key], marker='.')
         for ax in (ax1, ax2):
             ax.set_ylabel(r"Pulse energy ($\mu$J)")
             ax.set_xlim((-0.5, 100.5))

@@ -103,13 +103,7 @@ def compute_absorption(I0, I1):
 
 class XasAnalyzer(abc.ABC):
     """Abstract class for Xray Absoprtion Spectroscopy analysis."""
-    sources = {
-        'MONO': 'SA3_XTD10_MONO/MDL/PHOTON_ENERGY',
-        'XGM':'SCS_BLU_XGM/XGM/DOOCS',
-        'XGM_OUTPUT': 'SCS_BLU_XGM/XGM/DOOCS:output',
-        'SA3_XGM': 'SA3_XTD10_XGM/XGM/DOOCS',
-        'SA3_XGM_OUTPUT': 'SA3_XTD10_XGM/XGM/DOOCS:output'
-    }
+
 
     def __init__(self, run_folder):
         """Initialization.
@@ -117,6 +111,14 @@ class XasAnalyzer(abc.ABC):
         :param str run_folder: full path of the run folder.
         """
         self._run = RunDirectory(run_folder)
+        
+        self.sources = {
+            'MONO': 'SA3_XTD10_MONO/MDL/PHOTON_ENERGY',
+            'XGM':'SCS_BLU_XGM/XGM/DOOCS',
+            'XGM_OUTPUT': 'SCS_BLU_XGM/XGM/DOOCS:output',
+            'SA3_XGM': 'SA3_XTD10_XGM/XGM/DOOCS',
+            'SA3_XGM_OUTPUT': 'SA3_XTD10_XGM/XGM/DOOCS:output'
+        }
 
         # get the DataFrame for XGM control data
         self._xgm_df = self._run.get_dataframe(

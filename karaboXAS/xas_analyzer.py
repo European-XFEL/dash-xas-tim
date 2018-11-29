@@ -217,15 +217,22 @@ class XasAnalyzer(abc.ABC):
 
     @abc.abstractmethod
     def process(self, *args, **kwargs):
-        """Process the run data."""
+        """Process the run data.
+
+        :return: the current instance.
+        """
         pass
 
     def select(self, keys, lower=-np.inf, upper=np.inf):
         """Select data within the given boundaries.
-        
+
+        It modifies the internal data inplace.
+
         :param str/list/tuple/numpy.ndarray: key(s) for applying the filter.
         :param float lower: lower boundary (included).
         :param float upper: higher boundary (included).
+
+        :return: the current instance.
         """
         n0 = len(self._data)
         if isinstance(keys, (list, tuple, np.ndarray)):
@@ -388,6 +395,8 @@ class XasTim(XasAnalyzer):
             first peak. Ignored if use_apd == True.
         :param int background_width: width of a background. Ignored if 
             use_apd == True.
+
+        :return: the current instance.
         """
         # self._I0 is a numpy.ndarray
         self._I0 = self._run.get_array(

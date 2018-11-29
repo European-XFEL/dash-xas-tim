@@ -240,14 +240,9 @@ class XasAnalyzer(abc.ABC):
         return self
 
     @property
+    @abc.abstractmethod
     def data(self):
-        """Get the pulse-resolved data in pandas.DataFrame.
-
-        :return pandas.DataFrame with index being the Train ID and
-            columns being:
-            - I0/I1s (names differ in concrete classes): intensity;
-            - energy: photon energy.
-        """
+        """Get the pulse-resolved data in pandas.DataFrame."""
         return self._data            
 
     @abc.abstractmethod
@@ -420,6 +415,19 @@ class XasTim(XasAnalyzer):
         self._data = pd.DataFrame(data)
 
         return self
+
+    @property
+    def data(self):
+        """Get the pulse-resolved data in pandas.DataFrame.
+
+        :return: pulse-resolved data in pandas.DataFrame with index being
+            the train ID and columns being:
+            - XGM: intensity from XGM;
+            - MCP1, MCP2, MCP3, MCP4: intensity from MCPs. The sign of data
+                is reversed;
+            - energy: photon energy
+        """
+        return self._data            
 
     def compute_total_absorption(self):
         """Compute absorption for all data.

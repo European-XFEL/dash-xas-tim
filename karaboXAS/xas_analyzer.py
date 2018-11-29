@@ -237,7 +237,7 @@ class XasAnalyzer(abc.ABC):
         return fig, (ax1, ax2)
 
     @abc.abstractmethod
-    def process(self):
+    def process(self, *args, **kwargs):
         """Process the run data."""
         pass
 
@@ -274,43 +274,28 @@ class XasAnalyzer(abc.ABC):
 
     @abc.abstractmethod
     def compute_total_absorption(self):
-        """Compute absorption for all data.
-
-        :return: total absorption data in pandas.DataFrame with index being
-            the MCP channel name and columns being:
-            - muA: absorption mean;
-            - sigmaA: absorption standard deviation;
-            - muI0: I0 mean;
-            - sigmaI0: I0 standard deviation;
-            - weight: sum of I0 values;
-            - muI1: I1 mean;
-            - sigmaI1: I1 standard deviation;
-            - corr: correlation coefficient between I0 and I1;
-            - count: number of data.
-        """
+        """Compute absorption for all data."""
         pass
 
     @abc.abstractmethod
     def compute_spectrum(self, n_bins=20, point_wise=False):
         """Compute spectrum.
-        
-        :param int n_bins: number of energy bins.
-        :param bool point_wise: if True, calculate the absorption point wise 
-            and then average. Otherwise, average over I0 and I1 first and 
-            then calculate the absorption. Default = False
 
-        :return: spectrum data in pandas.DataFrame with index being the 
-            energy bin range and columnsbeing: 
-            - energy: central energy of each bin;
-            - count: number of data points for each energy bin;
-            - muXGM, muMCP1, muMCP2, muMCP3: intensity mean;
-            - sigmaXGM, sigmaMCP1, sigmaMCP2, sigmaMCP3: intensity standard 
-                deviations;
-            - muA1, muA2, muA3: absorption mean;
-            - sigmaA1, sigmaA2, sigmaA3: absorption standard deviation;
-            - corrMCP1, corrMCP2, corrMCP3: correlation between MCP and XGM.
+        :param int n_bins: number of energy bins.
+        :param bool point_wise: if True, calculate the absorption point wise
+            and then average. Otherwise, average over I0 and I1 first and
+            then calculate the absorption. Default = False
         """
         pass
+
+    @abc.abstractmethod
+    def plot_correlation(self, *args, **kwargs):
+        """Generate correlation plots."""
+        pass
+
+    @abc.abstractmethod
+    def plot_spectrum(self, *args, **kwargs):
+        """Generate spectrum plots."""
 
 
 class XasTim(XasAnalyzer):
@@ -412,7 +397,7 @@ class XasTim(XasAnalyzer):
     def process(self, n_pulses, pulse_id0=0, *, use_apd=True,
                 peak_start=None, peak_width=None, 
                 background_end=None, background_width=None):
-        """Override.
+        """Process the run data.
         
         :param int n_pulses: number of pulses in a train.
         :param int pulse_id0: first pulse ID. Default = 0.
@@ -455,9 +440,22 @@ class XasTim(XasAnalyzer):
         return self
 
     def compute_total_absorption(self):
-        """Override."""
+        """Compute absorption for all data.
+
+        :return: total absorption data in pandas.DataFrame with index being
+            the MCP channel name and columns being:
+            - muA: absorption mean;
+            - sigmaA: absorption standard deviation;
+            - muI0: I0 mean;
+            - sigmaI0: I0 standard deviation;
+            - weight: sum of I0 values;
+            - muI1: I1 mean;
+            - sigmaI1: I1 standard deviation;
+            - corr: correlation coefficient between I0 and I1;
+            - count: number of data.
+        """
         absorption = pd.DataFrame(
-            columns=['muA', 'sigmaA', 'muI0', 'sigmaI0', 'weight', 
+            columns=['muA', 'sigmaA', 'muI0', 'sigmaI0', 'weight',
                      'muI1', 'sigmaI1', 'corr', 'count']
         )
 
@@ -468,7 +466,24 @@ class XasTim(XasAnalyzer):
         return absorption
 
     def compute_spectrum(self, n_bins=20, point_wise=False):
-        """Override."""
+        """Compute spectrum.
+
+        :param int n_bins: number of energy bins.
+        :param bool point_wise: if True, calculate the absorption point wise
+            and then average. Otherwise, average over I0 and I1 first and
+            then calculate the absorption. Default = False
+
+        :return: spectrum data in pandas.DataFrame with index being the
+            energy bin range and columnsbeing:
+            - energy: central energy of each bin;
+            - count: number of data points for each energy bin;
+            - muXGM, muMCP1, muMCP2, muMCP3: intensity mean;
+            - sigmaXGM, sigmaMCP1, sigmaMCP2, sigmaMCP3: intensity standard
+                deviations;
+            - muA1, muA2, muA3: absorption mean;
+            - sigmaA1, sigmaA2, sigmaA3: absorption standard deviation;
+            - corrMCP1, corrMCP2, corrMCP3: correlation between MCP and XGM.
+        """
         # binning
         binned = self._data.groupby(pd.cut(self._data['energy'], bins=n_bins))
 
@@ -495,7 +510,7 @@ class XasTim(XasAnalyzer):
             # calculate absorption and its sigma for each bin
             for i, ch in enumerate(self._front_channels, 1):
                 spectrum['muA{}'.format(i)] = spectrum.apply(
-                    lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']), 
+                    lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']),
                     axis=1)
                 spectrum['sigmaA{}'.format(i)] = spectrum.apply(
                     lambda x: compute_sigma(x['muXGM'],
@@ -508,13 +523,13 @@ class XasTim(XasAnalyzer):
 
         return spectrum
 
-    def plot_correlation(self, channel=None, *, figsize=(8, 6), ms=6, 
+    def plot_correlation(self, channel=None, *, figsize=(8, 6), ms=6,
                          alpha=0.05, n_bins=20):
         """Generate correlation plots.
-        
+
         :param str channel: MCP channel name, e.g. MCP1, for visualizing
-            a single channel with four plots, or None (default) for 
-            visualizing all the channels with one plot each. 
+            a single channel with four plots, or None (default) for
+            visualizing all the channels with one plot each.
             Case insensitive.
         :param tuple figsize: figure size.
         :param int ms: marker size for the scatter plots.

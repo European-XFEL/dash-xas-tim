@@ -545,7 +545,7 @@ class XasTim(XasAnalyzer):
                                                        x['sigma' + ch],
                                                        x['corr' + ch]), axis=1)
         else:
-            raise NotImplementedError
+            raise NotImplementedError("point_wise=True is not implemented.")
 
         return spectrum
 

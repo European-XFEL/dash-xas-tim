@@ -489,19 +489,28 @@ class XasTim(XasAnalyzer):
 
         if not point_wise:
             # mean
+
             binned_mean = binned.mean()
+            # rename columns
             binned_mean.columns = ['mu' + col if col != 'energy' else col
                                    for col in binned_mean.columns]
             # standard deviation
+
             binned_std = binned.std()
+            # we use the "energy" column in binned_mean
             binned_std.drop("energy", axis=1, inplace=True)
             binned_std.columns = ['sigma' + col for col in binned_std.columns]
 
             # correlation
+
+            # calculate the correlation between 'XGM' and the four 'MCP'
+            # columns for each group.
             binned_corr = binned.corr().loc[pd.IndexSlice[:, 'XGM'], :].drop(
                 columns=['XGM', 'energy'], axis=1).reset_index(
                 level=1, drop=True)
             binned_corr.columns = ['corr' + col for col in binned_corr.columns]
+
+            # combine all the above results
 
             spectrum = pd.concat(
                 [binned_mean, binned_std, binned_corr], axis=1)

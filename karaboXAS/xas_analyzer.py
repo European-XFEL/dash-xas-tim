@@ -55,7 +55,7 @@ def compute_sigma(mu1, sigma1, mu2, sigma2, corr):
     :param float/Series sigma2: dataset 2 standard deviation.
     :param float/Series corr: correlation between dataset 1 and 2.
 
-    :return float/Series: standard deviation of mu2/mu1.
+    :return float/Series: standard deviation of -log(mu2/mu1).
     """
     if mu1 == 0 or mu2 == 0:
         raise ValueError("mu1 and mu2 cannot be zero!")

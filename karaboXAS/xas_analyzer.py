@@ -46,8 +46,8 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     return peaks, backgrounds 
 
 
-def compute_sigma(mu1, sigma1, mu2, sigma2, corr):
-    """Compute error propagation for correlated data.
+def compute_absorption_sigma(mu1, sigma1, mu2, sigma2, corr):
+    """Compute the standard deviation for absorption.
     
     :param float/Series mu1: dataset 1 mean.
     :param float/Series sigma1: dataset 1 standard deviation. 
@@ -64,26 +64,17 @@ def compute_sigma(mu1, sigma1, mu2, sigma2, corr):
                    - 2 * corr * sigma1 * sigma2 / (mu1 * mu2))
 
 
-def compute_absorption(muI0, sigmaI0, muI1, sigmaI1, corr):
+def compute_absorption(I0, I1):
     """Compute absorption.
 
     A = -log(I1/I0)
 
-    :param float muI0: I0 mean.
-    :param float sigmaI0: I0 standard deviation.
-    :param float muI1: I1 mean.
-    :param float sigmaI1: I1 standard deviation.
-    :param float corr: correlation coefficient between I0 and I1.
+    :param float/numpy.ndarray I0: incident intensity.
+    :param float/numpy.ndarray I1: transmitted intensity.
 
-    :return float muA: absorption mean.
-    :return float sigmaA: absorption standard deviation.
+    :return float/numpy/ndarray: absorption.
     """
-    # we need the 'abs' for the background channel which has both positive
-    # and negative data
-    muA = -np.log(abs(muI1) / muI0)
-    sigmaA = compute_sigma(muI0, sigmaI0, muI1, sigmaI1, corr)
-
-    return muA, sigmaA
+    return -np.log(abs(I1 / I0))
 
 
 class XasAnalyzer(abc.ABC):
@@ -462,7 +453,8 @@ class XasTim(XasAnalyzer):
 
             corr = np.corrcoef(I1, I0)[0, 1]
             absorption.loc[ch] = (
-                *compute_absorption(muI0, sigmaI0, muI1, sigmaI1, corr),
+                compute_absorption(muI0, muI1),
+                compute_absorption_sigma(muI0, sigmaI0, muI1, sigmaI1, corr),
                 muI0, sigmaI0, weight, muI1, sigmaI1, corr, count
             )
 
@@ -522,14 +514,13 @@ class XasTim(XasAnalyzer):
             # calculate absorption and its sigma for each bin
             for i, ch in enumerate(self._front_channels, 1):
                 spectrum['muA{}'.format(i)] = spectrum.apply(
-                    lambda x: -np.log(abs(x['mu' + ch])/x['muXGM']),
-                    axis=1)
+                    lambda x: compute_absorption(x['muXGM'], x['mu' + ch]), axis=1)
                 spectrum['sigmaA{}'.format(i)] = spectrum.apply(
-                    lambda x: compute_sigma(x['muXGM'],
-                                            x['sigmaXGM'],
-                                            x['mu' + ch],
-                                            x['sigma' + ch],
-                                            x['corr' + ch]), axis=1)
+                    lambda x: compute_absorption_sigma(x['muXGM'],
+                                                       x['sigmaXGM'],
+                                                       x['mu' + ch],
+                                                       x['sigma' + ch],
+                                                       x['corr' + ch]), axis=1)
         else:
             raise NotImplementedError
 
@@ -608,7 +599,7 @@ class XasTim(XasAnalyzer):
             axes[1][1].axhline(I1.mean(), c='#6A0888', ls='--')
 
             with np.errstate(divide='ignore', invalid='ignore'):
-                absp = -np.log(abs(I1) / I0) 
+                absp = compute_absorption(I0, I1)
             axes[0][1].scatter(I0, absp, s=ms, alpha=alpha)
             axes[0][1].set_xlabel("$I_0$")
             axes[0][1].set_ylabel("$-log(I_1/I_0)$")

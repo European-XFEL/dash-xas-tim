@@ -76,7 +76,7 @@ def compute_absorption(I0, I1):
 
     :return float/numpy/ndarray: absorption.
     """
-    return -np.log(abs(I1 / I0))
+    return -np.log(I1 / I0)
 
 
 class XasAnalyzer(abc.ABC):

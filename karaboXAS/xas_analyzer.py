@@ -190,6 +190,7 @@ class XasAnalyzer(abc.ABC):
         :param tuple figsize: figure size.
         """
         import matplotlib.pyplot as plt
+        plt.rcParams['font.size'] = 12
 
         key = "data.intensityTD"
         filtered = self._run.select("*XGM/*", key)

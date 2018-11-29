@@ -5,7 +5,7 @@ setup(
     name='karaboXAS',
     version="0.1.0",
     author='Jun Zhu',
-    author_email='jun.zhu@xfel.eu',
+    author_email='cas-support@xfel.eu',
     description='Xray absorption spectroscopy (XAS) data analysis',
     long_description='Offline data analysis and visualization tool for '
                      'Xray absorption spectroscopy (XAS) experiment '

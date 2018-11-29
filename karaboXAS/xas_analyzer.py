@@ -30,8 +30,10 @@ def find_peaks(trace, n_peaks, peak_start, peak_width,
     :param int background_width: width of a background.
     :param int peak_interval: gap between peaks.
 
-    :return list peaks: a list of peak data in 1D numpy.ndarray.
-    :return list backgrounds: a list of background data in 1D numpy.ndarray.
+    :return list peaks: a list of peak data in 2D numpy.ndarray with
+        shape = (trains, samples).
+    :return list backgrounds: a list of background data in 2D numpy.ndarray
+        with shape = (trains, samples).
     """
     peaks = []
     backgrounds = []
@@ -368,8 +370,9 @@ class XasTim(XasAnalyzer):
 
         ret = []
         for peak, background in zip(peaks, backgrounds):
-            #FIXME: why subtract a single value of the background?
-            ret.append(np.trapz(peak, axis=-1) - background.median(axis=-1))
+            bkg = background.median(axis=-1)
+            # the broadcast only works with xarray
+            ret.append(np.trapz(peak - bkg, axis=-1)) 
 
         return np.ravel(ret, order="F") 
 

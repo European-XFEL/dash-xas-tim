@@ -509,7 +509,7 @@ class XasTim(XasAnalyzer):
             # mean
 
             binned_mean = binned.mean()
-            # rename columns
+            # rename columns, e.g. 'A' -> 'muA'
             binned_mean.columns = ['mu' + col if col != 'energy' else col
                                    for col in binned_mean.columns]
             # standard deviation
@@ -521,7 +521,7 @@ class XasTim(XasAnalyzer):
 
             # correlation
 
-            # calculate the correlation between 'XGM' and the four 'MCP'
+            # calculate the correlation between 'XGM' and all the 'MCP'
             # columns for each group.
             binned_corr = binned.corr().loc[pd.IndexSlice[:, 'XGM'], :].drop(
                 columns=['XGM', 'energy'], axis=1).reset_index(

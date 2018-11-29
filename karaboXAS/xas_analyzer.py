@@ -375,7 +375,9 @@ class XasTim(XasAnalyzer):
         return fig, axes
 
     def _integrate_channel(self, channel_id, n_pulses, *args): 
-        """Integration of a FastAdc channel for all trains in a run.
+        """Integrate the peaks in a given channel for all trains.
+
+        The background value is subtracted.
  
         :param str channel_id: full name of the output channel.
         :param int n_pulses: number of pulses in a train.
@@ -383,13 +385,14 @@ class XasTim(XasAnalyzer):
         :return numpy.ndarray: 1D array holding integration result for
             each train.
         """
-        trace  = self._run.get_array(self.sources['DIGITIZER_OUTPUT'],
-                                     channel_id)
+        trace = self._run.get_array(self.sources['DIGITIZER_OUTPUT'],
+                                    channel_id)
 
         peaks, backgrounds = find_peaks(trace, n_pulses, *args)
 
         ret = []
         for peak, background in zip(peaks, backgrounds):
+            #FIXME: why subtract a single value of the background?
             ret.append(np.trapz(peak, axis=-1) - background.median(axis=-1))
 
         return np.ravel(ret, order="F") 

@@ -251,7 +251,7 @@ class XasAnalyzer(abc.ABC):
     @abc.abstractmethod
     def data(self):
         """Get the pulse-resolved data in pandas.DataFrame."""
-        return self._data            
+        pass
 
     @abc.abstractmethod
     def compute_total_absorption(self):
@@ -437,6 +437,8 @@ class XasTim(XasAnalyzer):
                 is reversed;
             - energy: photon energy
         """
+        if self._data is None:
+            raise ValueError("You need to call the method 'process' first.")
         return self._data            
 
     def compute_total_absorption(self):

@@ -89,7 +89,7 @@ class XasAnalyzer(abc.ABC):
         """
         self._run = RunDirectory(run_folder)
         
-        self.sources = {
+        self._sources = {
             'MONO': 'SA3_XTD10_MONO/MDL/PHOTON_ENERGY',
             'XGM':'SCS_BLU_XGM/XGM/DOOCS',
             'XGM_OUTPUT': 'SCS_BLU_XGM/XGM/DOOCS:output',
@@ -99,16 +99,16 @@ class XasAnalyzer(abc.ABC):
 
         # get the DataFrame for XGM control data
         self._xgm_df = self._run.get_dataframe(
-            fields=[(self.sources['XGM'], '*value')])
+            fields=[(self._sources['XGM'], '*value')])
         self._xgm_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
         self._sa3_xgm_df = self._run.get_dataframe(
-            fields=[(self.sources['SA3_XGM'], '*value')])
+            fields=[(self._sources['SA3_XGM'], '*value')])
         self._sa3_xgm_df.rename(columns=lambda x: x.split('/')[-1],
                                 inplace=True)
         
         # get the DataFrame for SoftMono control data
         self._mono_df = self._run.get_dataframe(
-            fields=[(self.sources['MONO'], '*value')])
+            fields=[(self._sources['MONO'], '*value')])
         self._mono_df.rename(columns=lambda x: x.split('/')[-1], inplace=True)
 
         self._photon_energies = None  # photon energies for each pulse
@@ -140,7 +140,7 @@ class XasAnalyzer(abc.ABC):
     def _check_sources(self):
         """Check all the required sources are in the data."""
         sources = self._run.all_sources
-        for src in self.sources.values():
+        for src in self._sources.values():
             if src not in sources:
                 raise ValueError("Source not found: {}!".format(src))
 
@@ -201,8 +201,8 @@ class XasAnalyzer(abc.ABC):
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
 
-        ax1.plot(data[self.sources['SA3_XGM_OUTPUT']][key], marker='.')
-        ax2.plot(data[self.sources['XGM_OUTPUT']][key], marker='.')
+        ax1.plot(data[self._sources['SA3_XGM_OUTPUT']][key], marker='.')
+        ax2.plot(data[self._sources['XGM_OUTPUT']][key], marker='.')
         for ax in (ax1, ax2):
             ax.set_ylabel(r"Pulse energy ($\mu$J)")
             ax.set_xlim((-0.5, 100.5))
@@ -292,7 +292,7 @@ class XasTim(XasAnalyzer):
         """
         super().__init__(*args, **kwargs)
 
-        self.sources.update({
+        self._sources.update({
             'DIGITIZER': 'SCS_UTC1_ADQ/ADC/1',
             'DIGITIZER_OUTPUT': 'SCS_UTC1_ADQ/ADC/1:network'
         })
@@ -332,7 +332,7 @@ class XasTim(XasAnalyzer):
             tid, data = self._run.train_from_id(train_id)
 
         digitizer_raw_data = {
-            ch: data[self.sources['DIGITIZER_OUTPUT']][value['raw']]
+            ch: data[self._sources['DIGITIZER_OUTPUT']][value['raw']]
             for ch, value in self._channels.items()
         }
 
@@ -366,7 +366,7 @@ class XasTim(XasAnalyzer):
         :return numpy.ndarray: 1D array holding integration result for
             each train.
         """
-        trace = self._run.get_array(self.sources['DIGITIZER_OUTPUT'],
+        trace = self._run.get_array(self._sources['DIGITIZER_OUTPUT'],
                                     channel_id)
 
         peaks, backgrounds = find_peaks(trace, n_pulses, *args)
@@ -400,13 +400,13 @@ class XasTim(XasAnalyzer):
         """
         # self._I0 is a numpy.ndarray
         self._I0 = self._run.get_array(
-            self.sources['XGM_OUTPUT'], 'data.intensityTD').values[...,
+            self._sources['XGM_OUTPUT'], 'data.intensityTD').values[...,
                 pulse_id0:pulse_id0 + n_pulses].flatten()
 
         for ch, value in self._channels.items():
             if use_apd:
                 integrals = self._run.get_array(
-                    self.sources['DIGITIZER_OUTPUT'], value['apd']).values[
+                    self._sources['DIGITIZER_OUTPUT'], value['apd']).values[
                         ..., :n_pulses]
                 self._I1[ch] = -np.ravel(integrals)
             else:

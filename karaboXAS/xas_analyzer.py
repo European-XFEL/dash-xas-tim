@@ -64,41 +64,26 @@ def compute_sigma(mu1, sigma1, mu2, sigma2, corr):
                    - 2 * corr * sigma1 * sigma2 / (mu1 * mu2))
 
 
-def compute_absorption(I0, I1):
+def compute_absorption(muI0, sigmaI0, muI1, sigmaI1, corr):
     """Compute absorption.
 
     A = -log(I1/I0)
 
-    :param numpy.ndarray I0: incident beam intensity, 1D.
-    :param numpy.ndarray I1: transmitted beam intensity, 1D.
+    :param float muI0: I0 mean.
+    :param float sigmaI0: I0 standard deviation.
+    :param float muI1: I1 mean.
+    :param float sigmaI1: I1 standard deviation.
+    :param float corr: correlation coefficient between I0 and I1.
 
     :return float muA: absorption mean.
     :return float sigmaA: absorption standard deviation.
-    :return float muI0: I0 mean.
-    :return float sigmaI0: I0 standard deviation.
-    :return float weight: weight calculated from I0.
-    :return float muI1: I1 mean.
-    :return float sigmaI1: I1 standard deviation.
-    :return float corr: correlation coefficient between I0 and I1.
-    :return int count: number of data points.
     """
-    count = len(I0)
-
-    muI0 = I0.mean()
-    sigmaI0 = I0.std()
-    weight = np.sum(I0)
-
-    muI1 = I1.mean()
-    sigmaI1 = I1.std()
-
-    corr = np.corrcoef(I1, I0)[0, 1]
-
     # we need the 'abs' for the background channel which has both positive
     # and negative data
     muA = -np.log(abs(muI1) / muI0)
     sigmaA = compute_sigma(muI0, sigmaI0, muI1, sigmaI1, corr)
 
-    return muA, sigmaA, muI0, sigmaI0, weight, muI1, sigmaI1, corr, count
+    return muA, sigmaA
 
 
 class XasAnalyzer(abc.ABC):
@@ -462,9 +447,24 @@ class XasTim(XasAnalyzer):
                      'muI1', 'sigmaI1', 'corr', 'count']
         )
 
+        I0 = self._data['XGM']
+
+        muI0 = I0.mean()
+        sigmaI0 = I0.std()
+        weight = I0.sum()
+        count = I0.size
+
         for ch in self._front_channels:
-            absorption.loc[ch] = compute_absorption(
-                self._data['XGM'], self._data[ch])
+            I1 = self._data[ch]
+
+            muI1 = I1.mean()
+            sigmaI1 = I1.std()
+
+            corr = np.corrcoef(I1, I0)[0, 1]
+            absorption.loc[ch] = (
+                *compute_absorption(muI0, sigmaI0, muI1, sigmaI1, corr),
+                muI0, sigmaI0, weight, muI1, sigmaI1, corr, count
+            )
 
         return absorption
 

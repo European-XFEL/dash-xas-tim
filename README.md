@@ -37,8 +37,16 @@ Tutorials can be found in the following notebooks:
 
 - [XAS with TIM](./notebooks/xas_with_tim_tutorial.ipynb)
 
-In case of problems during launching a Jupyter Notebook, you may need to upgrade `ipykernel` to fix them:
+In case of problems during launching a Jupyter Notebook, you may need to upgrade `ipykernel` to fix them.
+
+On the `Maxwell` cluster:
 ```sh
 $ module load anaconda3
 $ pip install --user --upgrade ipykernel
+```
+
+On the online cluster:
+```sh
+$ module load anaconda3
+$ pip install --user --upgrade /gpfs/exfel/sw/software/wheelhouse/ipykernel-5.1.0-py3-none-any.whl -f /gpfs/exfel/sw/software/wheelhouse --no-index
 ```

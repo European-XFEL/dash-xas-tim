@@ -28,7 +28,7 @@ $ pip install --user .
 On the online cluster:
 ```sh
 $ module load anaconda3
-$ pip install --user /gpfs/exfel/sw/software/wheelhouse/karaboXAS -f /gpfs/exfel/sw/software/wheelhouse --no-index
+$ pip install --user karaboXAS -f /gpfs/exfel/sw/software/wheelhouse --no-index
 ```
 
 ## Tutorials
@@ -48,5 +48,5 @@ $ pip install --user --upgrade ipykernel
 On the online cluster:
 ```sh
 $ module load anaconda3
-$ pip install --user --upgrade /gpfs/exfel/sw/software/wheelhouse/ipykernel-5.1.0-py3-none-any.whl -f /gpfs/exfel/sw/software/wheelhouse --no-index
+$ pip install --user --upgrade ipykernel -f /gpfs/exfel/sw/software/wheelhouse --no-index
 ```

@@ -17,16 +17,36 @@ In addition, it also provides rich interface for performing data analysis and vi
 
 ## Installation
 
+On the Maxwell cluster:
 ```sh
-$ https://git.xfel.eu/gitlab/dataAnalysis/xasAnalysis.git
+$ git clone https://github.com/European-XFEL/karaboXAS.git
+$ cd karaboXAS
 $ module load anaconda3
-$ pip install --user -e .
+$ pip install --user .
 ```
 
-**Note: on the online cluster, you need to have [karabo_data](https://github.com/European-XFEL/karabo_data) installed.**
+On the online cluster:
+```sh
+$ module load anaconda3
+$ pip install --user karaboXAS -f /gpfs/exfel/sw/software/wheelhouse --no-index
+```
 
 ## Tutorials
 
 Tutorials can be found in the following notebooks:
 
 - [XAS with TIM](./notebooks/xas_with_tim_tutorial.ipynb)
+
+In case of problems during launching a Jupyter Notebook, you may need to upgrade `ipykernel` to fix them.
+
+On the `Maxwell` cluster:
+```sh
+$ module load anaconda3
+$ pip install --user --upgrade ipykernel
+```
+
+On the online cluster:
+```sh
+$ module load anaconda3
+$ pip install --user --upgrade ipykernel -f /gpfs/exfel/sw/software/wheelhouse --no-index
+```

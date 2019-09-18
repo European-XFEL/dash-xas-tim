@@ -1,0 +1,185 @@
+/*
+Base colors: #17252A #2B7A78 #3AAFA9 #DEF2F1 #FEFFFF
+ */
+
+body{
+  background-color: #3AAFA9;
+}
+
+.display-none{
+  display: none;
+}
+
+.display-inlineblock{
+  display: inline-block;
+}
+
+.flex-container {
+  display: table;
+}
+
+/* Buttons
+–––––––––––––––––––––––––––––––––––––––––––––––––– */
+
+.button {
+  font-size: 14px;
+  color: #3AAFA9;
+  border-color: #3AAFA9;
+  background-color: #17252A;
+}
+
+.button:hover {
+  color: #FEFFFF;
+}
+
+.button:focus {
+  color: #FEFFFF;
+}
+
+.top-bar-button{
+  float: left;
+  width: 20%;
+  margin-top: 5px;
+  alignment: center;
+}
+
+#processor_list{
+  margin-top: 15px;
+  width: 30%;
+}
+
+#analysis_type{
+  margin-left: 30px;
+  width: 20%;
+}
+
+.float-right{
+  float:right;
+}
+
+.header-title{
+  font-family: Arial Narrow;
+  font-weight: 400;
+  color: #DEF2F1;
+}
+
+.div-selector-bar{
+  color: #FEFFFF;
+  font-size: 24px;
+}
+
+.div-info{
+  color: #FEFFFF;
+  font-weight: 300;
+}
+
+.p-info{
+  color: #17252A;
+  font-size: 18px;
+}
+
+.run-directory-bar{
+  width: 48%;
+  float: left;
+}
+
+#run-directory-tab{
+  font-size: 20px;
+  font-weight: bold;
+  color: #17252A;
+}
+
+.run-directory-content{
+  font-size: 20px;
+  width: 100%;
+}
+
+.two-col{
+  display: inline-block;
+  width: 50%;
+  text-align: center;
+}
+
+.three-col{
+  display: inline-block;
+  width: 33.333333%;
+  text-align: center;
+}
+
+.four-col{
+  display: inline-block;
+  width: 25%;
+  text-align: center;
+}
+
+.graph{
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.control-widget{
+  position: relative;
+  margin-left: 10px;
+  margin-right: 10px;
+  margin-bottom: 30px;
+}
+
+.control-widget > .control-input{
+  float: right;
+}
+
+.control-widget > .control-label{
+  float: right;
+}
+
+.control-widget > .inline-control-label{
+  float: right;
+  position: relative;
+  right: 10px;
+}
+
+.content-row{
+  display:flex;
+}
+
+#spectrum-graph{
+  width: 48%;
+  float: left;
+  flex: auto;
+}
+
+#control-panel{
+  width: 24%;
+  float: left;
+  flex: auto;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  margin-left: 10px;
+  border-style: solid;
+  border-color: #17252A;
+}
+
+#mcp-channel-input{
+  text-align: center;
+  color: #17252A;
+  font-weight: bold;
+}
+
+#correlation-graph{
+  width: 24%;
+  float: left;
+  flex: auto;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  margin-left: 10px;
+}
+
+.status-window{
+  background-color: #FEFFFF;
+  font-size: 16px;
+  color: #B22222;
+  padding-left: 10px;
+  padding-right: 10px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}

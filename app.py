@@ -670,4 +670,7 @@ if __name__ == "__main__":
                         action="store_true")
     args = parser.parse_args()
 
-    app.run_server(debug=args.debug, host='0.0.0.0', processes=1)
+    # The default port for DASH app is 8050. We fix the port here to avoid
+    # multiple apps running in a same machine. If there is already one
+    # running, all users can access it.
+    app.run_server(debug=args.debug, host='0.0.0.0', port=8051, processes=1)

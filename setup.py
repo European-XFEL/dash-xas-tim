@@ -1,6 +1,12 @@
 from setuptools import setup, find_packages
 
 
+def parse_requirements():
+    with open('requirements.txt') as f:
+        req = f.read().splitlines()
+    return req
+
+
 setup(
     name='dash_xas_tim',
     version="0.1.0",
@@ -18,14 +24,7 @@ setup(
         ],
     },
     package_data={},
-    install_requires=[
-        'numpy>=1.16',
-        'pandas>=0.25',
-        'dash>=1.1.0',
-        'dash-daq>=0.1.7',
-        'flask_caching>=1.7.2',
-        'karabo_data>=0.6.2'
-    ],
+    install_requires=parse_requirements(),
     python_requires='>=3.6',
     classifiers=[
         'Development Status :: 4 - Beta',

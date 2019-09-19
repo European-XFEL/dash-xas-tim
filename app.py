@@ -20,13 +20,14 @@ import dash_html_components as html
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 from flask_caching import Cache
+from flask import send_from_directory
 
 from karabo_data import RunDirectory, open_run
 from dash_xas_tim import get_run_info, compute_spectrum
 
 
 ROOT_PATH = "/gpfs/exfel/exp/"
-HOME_PATH = os.path.expanduser('~')
+HOME_PATH = osp.expanduser('~')
 
 
 class Colors:
@@ -45,7 +46,7 @@ MCP_COLORS = (Colors.FireBrick,
 
 
 app = dash.Dash("XAS TIM Analysis")
-app.css.config.serve_locally = True
+app.css.config.serve_locally = False
 app.scripts.config.serve_locally = True
 app.config['suppress_callback_exceptions'] = True
 
@@ -55,6 +56,10 @@ cache = Cache(app.server, config={
     'CACHE_DIR': 'cache-directory',
     'CACHE_THRESHOLD': 100,
 })
+
+
+for ss in ['base.css', 'style.css']:
+    app.css.append_css({"external_url": f"/static/{ss}"})
 
 
 # -----------------------------
@@ -647,6 +652,16 @@ app.layout = html.Div(children=[
         ],
     ),
 ])
+
+
+# -----
+# Flask
+# -----
+
+@app.server.route('/static/<stylesheet>')
+def serve_stylesheet(stylesheet):
+    path = osp.join(osp.dirname(osp.abspath(__file__)), 'assets')
+    return send_from_directory(path, stylesheet)
 
 
 if __name__ == "__main__":
